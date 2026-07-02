@@ -1,0 +1,21 @@
+[project]
+name = "bess-arbitrage"
+version = "0.1.0"
+description = "Perfect-foresight BESS arbitrage revenue and capture ratio on European day-ahead power markets (LP, HiGHS)"
+readme = "README.md"
+authors = [{ name = "Francesco Borsatto" }]
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "folium>=0.20.0",
+    "highspy>=1.14.0",
+    "matplotlib>=3.11.0",
+    "pandas>=3.0.3",
+    "pulp>=3.3.2",
+    "requests>=2.34.2",
+    "streamlit>=1.58.0",
+    "streamlit-folium>=0.27.2",
+]
+
+[project.urls]
+Repository = "https://github.com/fr4borsa/bess-arbitrage"

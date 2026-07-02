@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+*.png
+.DS_Store
+.cache/
+opencode.json
+.claude/
