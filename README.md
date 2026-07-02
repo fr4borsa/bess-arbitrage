@@ -72,7 +72,27 @@ uv run streamlit run app.py
 
 Two views: a single market in detail (price series + optimal dispatch), and a
 Europe map — click a bidding zone to place a battery there and get its revenue
-ceiling, capture ratio, and payback.
+ceiling, capture ratio, and payback. A toggle adds per-zone capture ratios to
+the map and the ranking table.
+
+## Atlas — every zone at once
+
+```bash
+uv run python -m bess_arbitrage.atlas --start 2026-01-01 --end 2026-06-30
+```
+
+Runs the same LP engine across ~35 EU bidding zones and ranks them: ceiling
+€/MW/year, payback, rolling day-ahead capture, persistence capture. Flags:
+`--zones DE-LU FR CH` (subset), `--no-capture` (ceiling only, much faster),
+`--csv atlas.csv` (export).
+
+```
+atlas 2026-06-01..2026-06-30 — 1 MW / 2h, RTE 85%, 1.5 cyc/d
+ zona  ceiling_eur_mw_y  payback_y  price_mean  hours  capture_rolling  capture_persistence
+DE-LU          135667.0        1.8       109.5    720             99.0                 89.5
+   FR           88160.0        2.8        66.1    720             96.6                 83.8
+   CH           76743.0        3.3       102.1    720             99.2                 87.2
+```
 
 ## Checks
 
@@ -80,12 +100,13 @@ ceiling, capture ratio, and payback.
 uv run python -m bess_arbitrage.model    # offline LP self-check
 uv run python -m bess_arbitrage.capture  # offline capture-ratio self-check (synthetic days)
 uv run python -m bess_arbitrage.prices   # live API smoke test (last 7 days DE-LU)
+uv run python -m bess_arbitrage.atlas --demo  # offline atlas self-check (synthetic zones)
 ```
 
 ## Roadmap (building in public)
 
-1. **Capture-ratio atlas** — the same LP engine across all EU bidding zones,
-   with spread / ceiling / capture rankings on the map.
+1. ~~**Capture-ratio atlas**~~ — shipped 2026-07: the LP engine across ~35 EU
+   bidding zones, ceiling / capture rankings on the map, CLI + CSV export.
 2. **Multi-market stack** — FCR and aFRR capacity alongside day-ahead arbitrage,
    toward an open, reproducible monthly BESS revenue benchmark (DE first) with a
    documented methodology.

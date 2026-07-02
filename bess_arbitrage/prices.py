@@ -28,10 +28,11 @@ def fetch_day_ahead(bzn: str = "DE-LU", start: str = "2025-01-01", end: str = "2
         except (json.JSONDecodeError, OSError):
             j = None
     if j is None:
-        # energy-charts rate-limits bursts (429); back off and retry a few times.
+        # energy-charts rate-limits bursts: 429, but under load also transient 5xx.
+        # Back off and retry on both; only non-transient errors surface immediately.
         for attempt in range(5):
             r = requests.get(API, params={"bzn": bzn, "start": start, "end": end}, timeout=60)
-            if r.status_code == 429:
+            if r.status_code == 429 or r.status_code >= 500:
                 time.sleep(2 ** attempt)  # 1,2,4,8,16s
                 continue
             break

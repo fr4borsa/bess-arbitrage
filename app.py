@@ -11,6 +11,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_folium import st_folium
 
+from bess_arbitrage.atlas import ZONES, run_atlas
 from bess_arbitrage.capture import persistence_forecast
 from bess_arbitrage.model import Battery, optimize
 from bess_arbitrage.prices import fetch_day_ahead
@@ -72,14 +73,6 @@ def panel(text: str, accent: str) -> str:
     return (f'<div style="background:{C["surface"]};border:1px solid {C["border"]};'
             f'border-left:3px solid {accent};border-radius:6px;padding:12px 16px;'
             f'color:{C["text"]};font-size:.92rem;">{text}</div>')
-
-# Bidding zone -> (lat, lon) centroide, per la mappa.
-ZONES = {
-    "DE-LU": (51.0, 9.0), "FR": (46.6, 2.4), "BE": (50.6, 4.7),
-    "NL": (52.1, 5.3), "AT": (47.6, 14.1), "CH": (46.8, 8.2),
-    "ES": (40.2, -3.7), "PL": (52.1, 19.4), "IT-North": (45.5, 9.5),
-    "DK1": (56.0, 9.2),
-}
 
 s = st.sidebar
 s.header("Batteria")
@@ -171,31 +164,24 @@ with tab_mkt:
 # TAB 2 — mappa Europa: dove conviene il BESS
 # ---------------------------------------------------------------------------
 with tab_map:
-    cc = st.columns(2)
+    cc = st.columns(3)
     mstart = cc[0].date_input("Inizio periodo", pd.Timestamp("2026-04-01"), key="ms").isoformat()
     mend = cc[1].date_input("Fine periodo", pd.Timestamp("2026-06-28"), key="me").isoformat()
+    cap_on = cc[2].toggle("Capture per zona", value=False,
+                          help="Rolling day-ahead e persistence per ogni zona: "
+                               "il primo calcolo può richiedere ~2 minuti.")
 
-    @st.cache_data(show_spinner="Calcolo il ceiling per zona…")
-    def zone_revenue(start: str, end: str, p: float, dur: float, r: float, cx: float, cyc: float) -> pd.DataFrame:
-        import time as _t
-        rows, errs = [], []
-        b = Battery(p, dur, r, cx, cyc or None)
-        for z, (lat, lon) in ZONES.items():
-            try:
-                px = fetch_day_ahead(z, start, end)
-                res = optimize(px, b)
-                rows.append({"zona": z, "lat": lat, "lon": lon,
-                             "rev": res.revenue_per_mw_year, "payback": res.simple_payback_years})
-            except Exception:
-                errs.append(z)
-            _t.sleep(0.8)  # gentile col rate-limit di energy-charts
-        return pd.DataFrame(rows), errs
+    @st.cache_data(show_spinner="Atlante: scarico prezzi e ottimizzo zona per zona…")
+    def zone_atlas(start: str, end: str, p: float, dur: float, r: float, cx: float,
+                   cyc: float, capture: bool) -> tuple[pd.DataFrame, list[str]]:
+        return run_atlas(start, end, Battery(p, dur, r, cx, cyc or None), capture=capture)
 
-    dfm, errs = zone_revenue(mstart, mend, power, duration, rte, capex, cycles)
+    dfm, errs = zone_atlas(mstart, mend, power, duration, rte, capex, cycles, cap_on)
     if dfm.empty:
         st.error("Nessuna zona ha restituito dati per il periodo scelto.")
         st.stop()
 
+    dfm = dfm.rename(columns={"ceiling_eur_mw_y": "rev", "payback_y": "payback"})
     lo, hi = dfm["rev"].min(), dfm["rev"].max()
     dfm["norm"] = (dfm["rev"] - lo) / (hi - lo + 1e-9)
     best = dfm.loc[dfm["rev"].idxmax()]
@@ -225,10 +211,13 @@ with tab_map:
       .leaflet-popup-close-button {{ color: {C['muted']}; }}
     </style>"""))
     for z in dfm.itertuples():
+        tip = f"{z.zona}: {z.rev:,.0f} €/MW/anno · payback {z.payback:.1f}y"
+        if cap_on:
+            tip += f" · capture {z.capture_rolling:.0%} / {z.capture_persistence:.0%}"
         folium.CircleMarker(
             [z.lat, z.lon], radius=8 + z.norm * 16, color="#D8DEE9", weight=1,
             fill=True, fill_color=zone_color(z.norm), fill_opacity=0.9,
-            tooltip=f"{z.zona}: {z.rev:,.0f} €/MW/anno · payback {z.payback:.1f}y",
+            tooltip=tip,
         ).add_to(fmap)
     for p in ss.placements:
         folium.Marker(
@@ -268,13 +257,20 @@ with tab_map:
             ss.placements, ss.done_clicks = [], set()
             st.rerun()
 
-    st.dataframe(
-        dfm[["zona", "rev", "payback"]].sort_values("rev", ascending=False)
-        .rename(columns={"rev": "€/MW/anno", "payback": "payback (anni)"})
-        .style.format({"€/MW/anno": "{:,.0f}", "payback (anni)": "{:.1f}"}),
-        use_container_width=True, hide_index=True,
-    )
+    tbl_cols = ["zona", "rev", "payback"] + (
+        ["capture_rolling", "capture_persistence"] if cap_on else [])
+    names = {"rev": "€/MW/anno", "payback": "payback (anni)",
+             "capture_rolling": "capture rolling", "capture_persistence": "capture persistence"}
+    fmt = {"€/MW/anno": "{:,.0f}", "payback (anni)": "{:.1f}",
+           "capture rolling": "{:.1%}", "capture persistence": "{:.1%}"}
+    df2 = dfm[tbl_cols].sort_values("rev", ascending=False).rename(columns=names)
+    st.dataframe(df2.style.format({c: fmt[c] for c in df2.columns if c in fmt}),
+                 use_container_width=True, hide_index=True)
+    st.download_button("Scarica l'atlante (CSV)",
+                       dfm.drop(columns=["lat", "lon", "norm"]).to_csv(index=False),
+                       file_name=f"bess-atlas_{mstart}_{mend}.csv")
     if errs:
         st.caption(f"Zone senza dati nel periodo (saltate): {', '.join(errs)}")
     st.caption("Ceiling perfect-foresight per zona: stesso BESS, stesso periodo. "
-               "Prossima vista: capture-ratio (reale vs tetto).")
+               "Capture: rolling = LP sui prezzi del giorno stesso (vista asta day-ahead); "
+               "persistence = prezzi di ieri come forecast, regolati sui prezzi reali di oggi.")
