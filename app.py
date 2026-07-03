@@ -1,6 +1,6 @@
-"""Streamlit UI — arbitraggio BESS sui mercati day-ahead europei.
-Tab 1: un mercato nel dettaglio (prezzo + dispatch).
-Tab 2: mappa Europa — dove conviene posizionare il BESS.
+"""Streamlit UI — BESS arbitrage on European day-ahead markets.
+Tab 1: a single market in detail (price + dispatch).
+Tab 2: Europe map — where it pays off to place a BESS.
 Run:  uv run streamlit run app.py
 """
 from __future__ import annotations
@@ -16,9 +16,9 @@ from bess_arbitrage.capture import persistence_forecast
 from bess_arbitrage.model import Battery, optimize
 from bess_arbitrage.prices import fetch_day_ahead
 
-st.set_page_config(page_title="BESS · sala controllo", layout="wide")
+st.set_page_config(page_title="BESS · control room", layout="wide")
 
-# Token di DESIGN.md — ogni colore a schermo viene da qui.
+# Tokens from DESIGN.md — every color on screen comes from here.
 C = {"bg": "#12161F", "surface": "#1B2230", "border": "#2A3347", "track": "#232B3B",
      "text": "#D8DEE9", "muted": "#8A94A6", "amber": "#F2A93B", "cyan": "#5BC8D8",
      "green": "#59B26B", "red": "#E06456"}
@@ -44,22 +44,22 @@ html, body, [data-testid="stAppViewContainer"] *:not([data-testid="stIconMateria
   text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; }}
 h1 {{ font-weight: 600; letter-spacing: -.01em; }}
 </style>
-<div class="eyebrow">mercati day-ahead · EU · prezzi reali energy-charts</div>
+<div class="eyebrow">day-ahead markets · EU · real energy-charts prices</div>
 """, unsafe_allow_html=True)
-st.title("BESS — sala controllo arbitraggio")
+st.title("BESS — arbitrage control room")
 
 
 def capture_instrument(ceiling_y: float, real_y: float, ratio: float) -> str:
-    """Signature element (DESIGN.md): ceiling → reale, gauge flat ambra."""
+    """Signature element (DESIGN.md): ceiling → real, flat amber gauge."""
     return f"""
 <div style="background:{C['surface']};border:1px solid {C['border']};border-radius:6px;
             padding:18px 22px;margin:6px 0 14px;">
-  <div class="eyebrow">strumento capture — quanto del tetto porta a casa una strategia reale (persistence)</div>
+  <div class="eyebrow">capture instrument — how much of the ceiling a real strategy (persistence) takes home</div>
   <div style="display:flex;align-items:baseline;gap:14px;margin-top:10px;flex-wrap:wrap;
               font-family:'IBM Plex Mono',monospace;">
     <span style="color:{C['muted']};font-size:1.05rem;">ceiling {ceiling_y:,.0f}</span>
     <span style="color:{C['cyan']};">→</span>
-    <span style="color:{C['amber']};font-size:1.9rem;font-weight:600;">{real_y:,.0f} €/MW·anno</span>
+    <span style="color:{C['amber']};font-size:1.9rem;font-weight:600;">{real_y:,.0f} €/MW·year</span>
     <span style="color:{C['amber']};font-size:1.2rem;margin-left:auto;">{ratio:.1%}</span>
   </div>
   <div style="height:10px;background:{C['track']};border-radius:5px;margin-top:12px;overflow:hidden;">
@@ -69,41 +69,41 @@ def capture_instrument(ceiling_y: float, real_y: float, ratio: float) -> str:
 
 
 def panel(text: str, accent: str) -> str:
-    """Sostituto on-token di st.info/st.success (i default Streamlit sono bannati)."""
+    """On-token substitute for st.info/st.success (Streamlit defaults are banned)."""
     return (f'<div style="background:{C["surface"]};border:1px solid {C["border"]};'
             f'border-left:3px solid {accent};border-radius:6px;padding:12px 16px;'
             f'color:{C["text"]};font-size:.92rem;">{text}</div>')
 
 s = st.sidebar
-s.header("Batteria")
-power = s.number_input("Potenza (MW)", 0.1, 100.0, 1.0, 0.5)
-duration = s.number_input("Durata (h)", 0.5, 12.0, 2.0, 0.5)
+s.header("Battery")
+power = s.number_input("Power (MW)", 0.1, 100.0, 1.0, 0.5)
+duration = s.number_input("Duration (h)", 0.5, 12.0, 2.0, 0.5)
 rte = s.slider("RTE (round-trip)", 0.5, 1.0, 0.85)
 capex = s.number_input("Capex (€/kWh)", 10.0, 1000.0, 125.0, 5.0)
-cycles = s.number_input("Cicli/giorno (0 = illimitati)", 0.0, 10.0, 1.5, 0.5)
+cycles = s.number_input("Cycles/day (0 = unlimited)", 0.0, 10.0, 1.5, 0.5)
 bat = Battery(power, duration, rte, capex, cycles or None)
 
 
-@st.cache_data(show_spinner="Scarico i prezzi…")
+@st.cache_data(show_spinner="Fetching prices…")
 def load_prices(bzn: str, start: str, end: str) -> pd.Series:
     return fetch_day_ahead(bzn, start, end)
 
 
-tab_mkt, tab_map = st.tabs(["Mercato (dettaglio)", "Mappa Europa"])
+tab_mkt, tab_map = st.tabs(["Market (detail)", "Europe map"])
 
 # ---------------------------------------------------------------------------
-# TAB 1 — un mercato nel dettaglio
+# TAB 1 — a single market in detail
 # ---------------------------------------------------------------------------
 with tab_mkt:
     c = st.columns(3)
-    bzn = c[0].selectbox("Zona", list(ZONES), 0)
-    start = c[1].date_input("Inizio", pd.Timestamp("2026-06-22")).isoformat()
-    end = c[2].date_input("Fine", pd.Timestamp("2026-06-28")).isoformat()
+    bzn = c[0].selectbox("Zone", list(ZONES), 0)
+    start = c[1].date_input("Start", pd.Timestamp("2026-06-22")).isoformat()
+    end = c[2].date_input("End", pd.Timestamp("2026-06-28")).isoformat()
 
     try:
         px = load_prices(bzn, start, end)
     except Exception as e:
-        st.error(f"Niente prezzi per {bzn} {start}..{end}: {e}")
+        st.error(f"No prices for {bzn} {start}..{end}: {e}")
         st.stop()
 
     res = optimize(px, bat)
@@ -115,13 +115,13 @@ with tab_mkt:
     spread = (evening - midday).mean()
 
     m = st.columns(5)
-    m[0].metric("Ceiling €/MW/anno", f"{res.revenue_per_mw_year:,.0f}")
-    m[1].metric("Payback (anni)", f"{res.simple_payback_years:.1f}")
-    m[2].metric("Prezzo medio €/MWh", f"{px.mean():.0f}")
-    m[3].metric("Picco €/MWh", f"{px.max():.0f}")
-    m[4].metric("Spread serale", f"{spread:.0f} €")
+    m[0].metric("Ceiling €/MW/year", f"{res.revenue_per_mw_year:,.0f}")
+    m[1].metric("Payback (years)", f"{res.simple_payback_years:.1f}")
+    m[2].metric("Average price €/MWh", f"{px.mean():.0f}")
+    m[3].metric("Peak €/MWh", f"{px.max():.0f}")
+    m[4].metric("Evening spread", f"{spread:.0f} €")
 
-    @st.cache_data(show_spinner="Eseguo la strategia realistica (persistence)…")
+    @st.cache_data(show_spinner="Running the realistic strategy (persistence)…")
     def run_capture(bzn: str, start: str, end: str, p: float, dur: float, r: float,
                     cx: float, cyc: float) -> tuple[float, float, int]:
         d0 = (pd.Timestamp(start) - pd.Timedelta(days=1)).date().isoformat()
@@ -134,9 +134,9 @@ with tab_mkt:
         st.markdown(capture_instrument(ceil_eur * per_mw_y, real_eur * per_mw_y,
                                        real_eur / ceil_eur), unsafe_allow_html=True)
     except Exception:
-        st.caption("Strategia realistica non calcolabile sul periodo (serve almeno il giorno precedente).")
+        st.caption("Realistic strategy not computable for this period (needs at least the previous day).")
 
-    st.subheader("Prezzo e punti di guadagno — verde compra basso · ambra vendi alto")
+    st.subheader("Price and profit points — green buys low · amber sells high")
     df = d.reset_index()
     df.columns = ["t", "price", "charge", "discharge", "soc"]
     base = alt.Chart(df).encode(x=alt.X("t:T", title=None))
@@ -145,40 +145,40 @@ with tab_mkt:
     buy = (base.transform_filter("datum.charge > 0.001")
            .mark_circle(color=C["green"], opacity=0.9)
            .encode(y="price:Q", size=alt.Size("charge:Q", legend=None, scale=alt.Scale(range=[30, 300])),
-                   tooltip=[alt.Tooltip("t:T", title="ora"), alt.Tooltip("price:Q", format=".0f"),
-                            alt.Tooltip("charge:Q", title="carica MWh", format=".2f")]))
+                   tooltip=[alt.Tooltip("t:T", title="hour"), alt.Tooltip("price:Q", format=".0f"),
+                            alt.Tooltip("charge:Q", title="charge MWh", format=".2f")]))
     sell = (base.transform_filter("datum.discharge > 0.001")
             .mark_circle(color=C["amber"], opacity=0.9)
             .encode(y="price:Q", size=alt.Size("discharge:Q", legend=None, scale=alt.Scale(range=[30, 300])),
-                    tooltip=[alt.Tooltip("t:T", title="ora"), alt.Tooltip("price:Q", format=".0f"),
-                             alt.Tooltip("discharge:Q", title="scarica MWh", format=".2f")]))
+                    tooltip=[alt.Tooltip("t:T", title="hour"), alt.Tooltip("price:Q", format=".0f"),
+                             alt.Tooltip("discharge:Q", title="discharge MWh", format=".2f")]))
     chart = ((price_line + buy + sell).interactive()
              .configure_axis(labelFont="IBM Plex Mono", titleFont="IBM Plex Mono",
                              labelColor=C["muted"], titleColor=C["muted"]))
     st.altair_chart(chart, use_container_width=True)
 
-    st.subheader("Stato di carica (SOC)")
+    st.subheader("State of charge (SOC)")
     st.area_chart(d["soc"], height=170, color=C["cyan"])
 
 # ---------------------------------------------------------------------------
-# TAB 2 — mappa Europa: dove conviene il BESS
+# TAB 2 — Europe map: where the BESS pays off
 # ---------------------------------------------------------------------------
 with tab_map:
     cc = st.columns(3)
-    mstart = cc[0].date_input("Inizio periodo", pd.Timestamp("2026-04-01"), key="ms").isoformat()
-    mend = cc[1].date_input("Fine periodo", pd.Timestamp("2026-06-28"), key="me").isoformat()
-    cap_on = cc[2].toggle("Capture per zona", value=False,
-                          help="Rolling day-ahead e persistence per ogni zona: "
-                               "il primo calcolo può richiedere ~2 minuti.")
+    mstart = cc[0].date_input("Period start", pd.Timestamp("2026-04-01"), key="ms").isoformat()
+    mend = cc[1].date_input("Period end", pd.Timestamp("2026-06-28"), key="me").isoformat()
+    cap_on = cc[2].toggle("Capture per zone", value=False,
+                          help="Rolling day-ahead and persistence for every zone: "
+                               "the first computation can take ~2 minutes.")
 
-    @st.cache_data(show_spinner="Atlante: scarico prezzi e ottimizzo zona per zona…")
+    @st.cache_data(show_spinner="Atlas: fetching prices and optimizing zone by zone…")
     def zone_atlas(start: str, end: str, p: float, dur: float, r: float, cx: float,
                    cyc: float, capture: bool) -> tuple[pd.DataFrame, list[str]]:
         return run_atlas(start, end, Battery(p, dur, r, cx, cyc or None), capture=capture)
 
     dfm, errs = zone_atlas(mstart, mend, power, duration, rte, capex, cycles, cap_on)
     if dfm.empty:
-        st.error("Nessuna zona ha restituito dati per il periodo scelto.")
+        st.error("No zone returned data for the selected period.")
         st.stop()
 
     dfm = dfm.rename(columns={"ceiling_eur_mw_y": "rev", "payback_y": "payback"})
@@ -186,21 +186,21 @@ with tab_map:
     dfm["norm"] = (dfm["rev"] - lo) / (hi - lo + 1e-9)
     best = dfm.loc[dfm["rev"].idxmax()]
 
-    st.subheader("Clicca sulla mappa per piazzare una batteria — vedi quanto renderebbe lì")
-    st.caption("Ambra intensa = arbitraggio più redditizio · raggio ∝ ricavo. "
-               "Il click viene assegnato alla bidding zone più vicina.")
+    st.subheader("Click the map to place a battery — see how much it would earn there")
+    st.caption("Deep amber = more profitable arbitrage · radius ∝ revenue. "
+               "The click is assigned to the nearest bidding zone.")
 
     ss = st.session_state
     ss.setdefault("placements", [])
     ss.setdefault("done_clicks", set())
 
     def zone_color(norm: float) -> str:
-        # scala mono-ambra: ambra spenta -> ambra piena (stessa tonalità, solo intensità)
+        # mono-amber scale: dim amber -> full amber (same hue, only intensity changes)
         lo, hi = (0x5E, 0x45, 0x1C), (0xF2, 0xA9, 0x3B)
         return "#" + "".join(f"{int(a + (b - a) * norm):02x}" for a, b in zip(lo, hi))
 
     fmap = folium.Map(location=[49.5, 8.0], zoom_start=4, tiles="CartoDB dark_matter")
-    # il CSS della pagina non entra nell'iframe: tema di popup/tooltip iniettato nella mappa
+    # the page CSS doesn't reach the iframe: popup/tooltip theme injected into the map
     fmap.get_root().header.add_child(folium.Element(f"""<style>
       @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap');
       .leaflet-tooltip, .leaflet-popup-content-wrapper, .leaflet-popup-tip {{
@@ -211,7 +211,7 @@ with tab_map:
       .leaflet-popup-close-button {{ color: {C['muted']}; }}
     </style>"""))
     for z in dfm.itertuples():
-        tip = f"{z.zona}: {z.rev:,.0f} €/MW/anno · payback {z.payback:.1f}y"
+        tip = f"{z.zona}: {z.rev:,.0f} €/MW/year · payback {z.payback:.1f}y"
         if cap_on:
             tip += f" · capture {z.capture_rolling:.0%} / {z.capture_persistence:.0%}"
         folium.CircleMarker(
@@ -223,7 +223,7 @@ with tab_map:
         folium.Marker(
             [p["lat"], p["lon"]], icon=folium.Icon(color="orange", icon="bolt", prefix="fa"),
             popup=f"{power:g} MW / {duration:g}h → {p['zona']}<br>"
-                  f"<b>{p['rev']:,.0f} €/MW/anno</b> · payback {p['payback']:.1f}y",
+                  f"<b>{p['rev']:,.0f} €/MW/year</b> · payback {p['payback']:.1f}y",
         ).add_to(fmap)
 
     out = st_folium(fmap, height=520, use_container_width=True, key="mappa_eu")
@@ -233,7 +233,7 @@ with tab_map:
         key = (round(click["lat"], 5), round(click["lng"], 5))
         if key not in ss.done_clicks:
             ss.done_clicks.add(key)
-            # ponytail: zona = centroide più vicino, niente poligoni; geojson zone se servirà precisione ai confini
+            # ponytail: zona = nearest centroid, no polygons; add zone geojson if border precision is ever needed
             zrow = dfm.loc[((dfm.lat - key[0]) ** 2 + (dfm.lon - key[1]) ** 2).idxmin()]
             ss.placements.append({"lat": key[0], "lon": key[1], "zona": zrow.zona,
                                   "rev": zrow.rev, "payback": zrow.payback})
@@ -243,34 +243,34 @@ with tab_map:
         last = ss.placements[-1]
         tot = sum(p["rev"] for p in ss.placements) * power
         c = st.columns(3)
-        c[0].metric(f"Ultima: {last['zona']} — €/MW/anno", f"{last['rev']:,.0f}",
-                    f"{(last['rev'] / best.rev - 1) * 100:+.0f}% vs migliore ({best.zona})")
-        c[1].metric("Portafoglio", f"{len(ss.placements)} BESS", f"{tot:,.0f} €/anno totali")
+        c[0].metric(f"Last: {last['zona']} — €/MW/year", f"{last['rev']:,.0f}",
+                    f"{(last['rev'] / best.rev - 1) * 100:+.0f}% vs best ({best.zona})")
+        c[1].metric("Portfolio", f"{len(ss.placements)} BESS", f"{tot:,.0f} €/year total")
         if last["zona"] == best.zona:
-            c[2].markdown(panel("Zona migliore trovata: qui il capture conta di più.",
+            c[2].markdown(panel("Best zone found: here capture matters most.",
                                 C["green"]), unsafe_allow_html=True)
         else:
-            c[2].markdown(panel(f"La zona migliore è <b>{best.zona}</b> — vale "
-                                f"<span class='mono'>{best.rev - last['rev']:,.0f}</span> €/MW/anno in più.",
+            c[2].markdown(panel(f"The best zone is <b>{best.zona}</b> — worth "
+                                f"<span class='mono'>{best.rev - last['rev']:,.0f}</span> €/MW/year more.",
                                 C["amber"]), unsafe_allow_html=True)
-        if st.button("Svuota portafoglio"):
+        if st.button("Clear portfolio"):
             ss.placements, ss.done_clicks = [], set()
             st.rerun()
 
     tbl_cols = ["zona", "rev", "payback"] + (
         ["capture_rolling", "capture_persistence"] if cap_on else [])
-    names = {"rev": "€/MW/anno", "payback": "payback (anni)",
+    names = {"rev": "€/MW/year", "payback": "payback (years)",
              "capture_rolling": "capture rolling", "capture_persistence": "capture persistence"}
-    fmt = {"€/MW/anno": "{:,.0f}", "payback (anni)": "{:.1f}",
+    fmt = {"€/MW/year": "{:,.0f}", "payback (years)": "{:.1f}",
            "capture rolling": "{:.1%}", "capture persistence": "{:.1%}"}
     df2 = dfm[tbl_cols].sort_values("rev", ascending=False).rename(columns=names)
     st.dataframe(df2.style.format({c: fmt[c] for c in df2.columns if c in fmt}),
                  use_container_width=True, hide_index=True)
-    st.download_button("Scarica l'atlante (CSV)",
+    st.download_button("Download atlas (CSV)",
                        dfm.drop(columns=["lat", "lon", "norm"]).to_csv(index=False),
                        file_name=f"bess-atlas_{mstart}_{mend}.csv")
     if errs:
-        st.caption(f"Zone senza dati nel periodo (saltate): {', '.join(errs)}")
-    st.caption("Ceiling perfect-foresight per zona: stesso BESS, stesso periodo. "
-               "Capture: rolling = LP sui prezzi del giorno stesso (vista asta day-ahead); "
-               "persistence = prezzi di ieri come forecast, regolati sui prezzi reali di oggi.")
+        st.caption(f"Zones with no data in this period (skipped): {', '.join(errs)}")
+    st.caption("Perfect-foresight ceiling per zone: same BESS, same period. "
+               "Capture: rolling = LP on same-day prices (day-ahead auction view); "
+               "persistence = yesterday's prices as forecast, settled against today's real prices.")
