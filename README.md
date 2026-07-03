@@ -94,22 +94,51 @@ DE-LU          135667.0        1.8       109.5    720             99.0          
    CH           76743.0        3.3       102.1    720             99.2                 87.2
 ```
 
+## Multi-market stack — FCR / aFRR capacity (DE)
+
+```bash
+uv run python -m bess_arbitrage.bench --start 2026-06-01 --end 2026-06-30
+```
+
+Co-optimizes day-ahead dispatch with FCR and aFRR **capacity** commitments —
+4h blocks, German auctions from
+[regelleistung.net](https://www.regelleistung.net/apps/datacenter/tenders/)
+(public API, no key). The LP reserves power headroom in the committed direction
+plus SOC headroom to actually deliver: FCR 15 min both ways, aFRR 1 h in the
+product's direction (both are `optimize()` kwargs).
+
+```
+bench DE 2026-06-01..2026-06-30 — 1 MW / 2h, RTE 85%, 1.5 cyc/d, 720 h
+  DA-only ceiling :    135,667 EUR/MW/y
+  stacked ceiling :    313,303 EUR/MW/y  (uplift +130.9%)
+  split (window)  : {'da_eur': 4281, 'fcr_eur': 2860, 'afrr_pos_eur': 7485, 'afrr_neg_eur': 11126} EUR
+```
+
+Methodology — an honest floor with stated limits: capacity revenue only (no
+aFRR activation energy, which adds revenue in reality); FCR at the German
+pay-as-cleared clearing price; aFRR at the **mean** accepted bid (the market is
+pay-as-bid — conservative for a 1 MW price-taker); perfect foresight on all
+prices, consistent with the ceiling framing everywhere else in this repo.
+
 ## Checks
 
 ```bash
-uv run python -m bess_arbitrage.model    # offline LP self-check
+uv run python -m bess_arbitrage.model    # offline LP self-check (arbitrage + stack co-optimization)
 uv run python -m bess_arbitrage.capture  # offline capture-ratio self-check (synthetic days)
 uv run python -m bess_arbitrage.prices   # live API smoke test (last 7 days DE-LU)
 uv run python -m bess_arbitrage.atlas --demo  # offline atlas self-check (synthetic zones)
+uv run python -m bess_arbitrage.bench --demo  # offline stack-benchmark self-check
+uv run python -m bess_arbitrage.balancing     # live API smoke test (regelleistung.net, one day)
 ```
 
 ## Roadmap (building in public)
 
 1. ~~**Capture-ratio atlas**~~ — shipped 2026-07: the LP engine across ~35 EU
    bidding zones, ceiling / capture rankings on the map, CLI + CSV export.
-2. **Multi-market stack** — FCR and aFRR capacity alongside day-ahead arbitrage,
-   toward an open, reproducible monthly BESS revenue benchmark (DE first) with a
-   documented methodology.
+2. ~~**Multi-market stack**~~ — shipped 2026-07: FCR + aFRR capacity co-optimized
+   with day-ahead arbitrage (capacity-only floor, documented methodology) and a
+   monthly DE benchmark CLI. Next within this thread: aFRR activation energy,
+   auto-published monthly report.
 3. **Battery realism** — degradation-aware dispatch; grid-fee and
    connection-constraint impacts on the business case.
 
