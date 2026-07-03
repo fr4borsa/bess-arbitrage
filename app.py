@@ -1,9 +1,13 @@
-"""Streamlit UI — BESS arbitrage on European day-ahead markets.
-Tab 1: a single market in detail (price + dispatch).
-Tab 2: Europe map — where it pays off to place a BESS.
+"""Streamlit UI — BESS revenue insights on European power markets.
+
+Insight-first: the app opens on live answers (what a battery earned yesterday,
+which zone leads, what information is worth), the calculator is the sidebar.
+Tabs: Today · Day replay · Europe map · Trends.
 Run:  uv run streamlit run app.py
 """
 from __future__ import annotations
+
+import datetime as dt
 
 import altair as alt
 import folium
@@ -12,8 +16,11 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 from bess_arbitrage.atlas import ZONES, run_atlas
-from bess_arbitrage.capture import persistence_forecast
-from bess_arbitrage.model import Battery, optimize
+from bess_arbitrage.balancing import fetch_products_de
+from bess_arbitrage.bench import run_sequential
+from bess_arbitrage.capture import persistence_forecast, rolling_day_ahead
+from bess_arbitrage.insights import atlas_headlines, day_stack, monthly_spread
+from bess_arbitrage.model import Battery
 from bess_arbitrage.prices import fetch_day_ahead
 
 st.set_page_config(page_title="BESS · control room", layout="wide")
@@ -22,49 +29,81 @@ st.set_page_config(page_title="BESS · control room", layout="wide")
 C = {"bg": "#12161F", "surface": "#1B2230", "border": "#2A3347", "track": "#232B3B",
      "text": "#D8DEE9", "muted": "#8A94A6", "amber": "#F2A93B", "cyan": "#5BC8D8",
      "green": "#59B26B", "red": "#E06456"}
+# Per-market colors, used consistently in every view: DA = neutral ink,
+# FCR = cyan, aFRR POS = dim amber (the pure amber #F2A93B stays reserved for
+# revenue figures — the signature), aFRR NEG = green (charge side).
+MKT = {"da": C["muted"], "fcr": C["cyan"], "afrr_pos": "#C08430", "afrr_neg": C["green"]}
+MKT_LABEL = {"da": "day-ahead", "fcr": "FCR", "afrr_pos": "aFRR pos", "afrr_neg": "aFRR neg"}
 
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;600&display=swap');
 html, body, [data-testid="stAppViewContainer"] *:not([data-testid="stIconMaterial"]) {{
   font-family: 'IBM Plex Sans', sans-serif; }}
-[data-testid="stMetricValue"], [data-testid="stMetricDelta"], code, .mono {{
+[data-testid="stMetricValue"], [data-testid="stMetricDelta"], code, .mono, .mono * {{
   font-family: 'IBM Plex Mono', monospace !important; }}
+[data-testid="stMetricDelta"] {{ border-radius: 6px !important; }}
 [data-testid="stMetric"] {{ background: {C['surface']}; border: 1px solid {C['border']};
   border-radius: 6px; padding: 12px 16px; }}
 [data-testid="stMetricValue"] {{ font-size: clamp(1.02rem, 1.6vw, 1.45rem); }}
 [data-testid="stMetricLabel"] p {{ color: {C['muted']}; text-transform: uppercase;
-  letter-spacing: .08em; font-size: .72rem; }}
+  letter-spacing: .08em; font-size: .72rem;
+  font-family: 'IBM Plex Mono', monospace !important; }}
 [data-testid="stWidgetLabel"] p {{ color: {C['muted']}; }}
 @media (max-width: 900px) {{
   [data-testid="stHorizontalBlock"] {{ flex-wrap: wrap; }}
   [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {{ min-width: 150px; flex: 1 1 30%; }}
 }}
-.eyebrow {{ font-family: 'IBM Plex Mono', monospace; color: {C['muted']};
+.eyebrow {{ font-family: 'IBM Plex Mono', monospace !important; color: {C['muted']};
   text-transform: uppercase; letter-spacing: .14em; font-size: .75rem; }}
 h1 {{ font-weight: 600; letter-spacing: -.01em; }}
 </style>
-<div class="eyebrow">day-ahead markets · EU · real energy-charts prices</div>
+<div class="eyebrow">EU power markets · real auction data · energy-charts + regelleistung</div>
 """, unsafe_allow_html=True)
-st.title("BESS — arbitrage control room")
+st.title("BESS — revenue control room")
 
 
-def capture_instrument(ceiling_y: float, real_y: float, ratio: float) -> str:
-    """Signature element (DESIGN.md): ceiling → real, flat amber gauge."""
+# ---------------------------------------------------------------------------
+# shared HTML instruments (DESIGN.md signature language)
+# ---------------------------------------------------------------------------
+def instrument(eyebrow: str, main: str, side: str, bar: list[tuple[str, float]],
+               legend: list[tuple[str, str, str]] | None = None) -> str:
+    """Panel with big amber mono number + segmented flat gauge (share-of-total)."""
+    total = sum(v for _, v in bar) or 1.0
+    segs = "".join(
+        f'<div style="height:100%;width:{max(0.0, v) / total * 100:.2f}%;'
+        f'background:{c};float:left;"></div>' for c, v in bar)
+    leg = ""
+    if legend:
+        # each swatch+label pair is nowrap so wraps happen between pairs, never inside
+        leg = ('<div class="mono" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;'
+               'font-size:.8rem;">'
+               + "".join(f'<span style="white-space:nowrap;color:{C["muted"]};">'
+                         f'<span style="color:{c};">■</span> {n} '
+                         f'<span style="color:{C["text"]};">{v}</span></span>'
+                         for n, c, v in legend) + "</div>")
     return f"""
 <div style="background:{C['surface']};border:1px solid {C['border']};border-radius:6px;
             padding:18px 22px;margin:6px 0 14px;">
-  <div class="eyebrow">capture instrument — how much of the ceiling a real strategy (persistence) takes home</div>
-  <div style="display:flex;align-items:baseline;gap:14px;margin-top:10px;flex-wrap:wrap;
-              font-family:'IBM Plex Mono',monospace;">
-    <span style="color:{C['muted']};font-size:1.05rem;">ceiling {ceiling_y:,.0f}</span>
-    <span style="color:{C['cyan']};">→</span>
-    <span style="color:{C['amber']};font-size:1.9rem;font-weight:600;">{real_y:,.0f} €/MW·year</span>
-    <span style="color:{C['amber']};font-size:1.2rem;margin-left:auto;">{ratio:.1%}</span>
+  <div class="eyebrow">{eyebrow}</div>
+  <div class="mono" style="display:flex;align-items:baseline;gap:14px;margin-top:10px;flex-wrap:wrap;">
+    <span style="color:{C['amber']};font-size:1.9rem;font-weight:600;">{main}</span>
+    <span style="color:{C['muted']};font-size:1.0rem;margin-left:auto;">{side}</span>
   </div>
-  <div style="height:10px;background:{C['track']};border-radius:5px;margin-top:12px;overflow:hidden;">
-    <div style="height:100%;width:{ratio * 100:.1f}%;background:{C['amber']};"></div>
+  <div style="height:10px;background:{C['track']};border-radius:5px;margin-top:12px;overflow:hidden;">{segs}</div>
+  {leg}
+</div>"""
+
+
+def gauge_row(label: str, value: str, ratio: float, color: str) -> str:
+    return f"""
+<div class="mono" style="display:grid;grid-template-columns:180px 1fr 90px;gap:12px;
+            align-items:center;margin:7px 0;font-size:.85rem;">
+  <span style="color:{C['muted']};">{label}</span>
+  <div style="height:8px;background:{C['track']};border-radius:4px;overflow:hidden;">
+    <div style="height:100%;width:{ratio * 100:.1f}%;background:{color};"></div>
   </div>
+  <span style="color:{C['text']};text-align:right;">{value}</span>
 </div>"""
 
 
@@ -72,8 +111,23 @@ def panel(text: str, accent: str) -> str:
     """On-token substitute for st.info/st.success (Streamlit defaults are banned)."""
     return (f'<div style="background:{C["surface"]};border:1px solid {C["border"]};'
             f'border-left:3px solid {accent};border-radius:6px;padding:12px 16px;'
-            f'color:{C["text"]};font-size:.92rem;">{text}</div>')
+            f'color:{C["text"]};font-size:.92rem;margin:4px 0;">{text}</div>')
 
+
+def headline_list(lines: list[str]) -> str:
+    rows = "".join(
+        f'<div style="display:flex;gap:12px;margin:9px 0;align-items:baseline;">'
+        f'<span style="color:{C["amber"]};font-family:\'IBM Plex Mono\',monospace;">▸</span>'
+        f'<span style="color:{C["text"]};font-size:.95rem;">{l}</span></div>' for l in lines)
+    return (f'<div style="background:{C["surface"]};border:1px solid {C["border"]};'
+            f'border-radius:6px;padding:12px 18px;">'
+            f'<div class="eyebrow">what the atlas says — auto-generated from the ranking</div>'
+            f'{rows}</div>')
+
+
+# ---------------------------------------------------------------------------
+# sidebar — the calculator, demoted but always available
+# ---------------------------------------------------------------------------
 s = st.sidebar
 s.header("Battery")
 power = s.number_input("Power (MW)", 0.1, 100.0, 1.0, 0.5)
@@ -83,62 +137,46 @@ capex = s.number_input("Capex (€/kWh)", 10.0, 1000.0, 125.0, 5.0)
 cycles = s.number_input("Cycles/day (0 = unlimited)", 0.0, 10.0, 1.5, 0.5)
 bat = Battery(power, duration, rte, capex, cycles or None)
 
+YESTERDAY = (pd.Timestamp.now(tz="Europe/Berlin") - pd.Timedelta(days=1)).date()
+
 
 @st.cache_data(show_spinner="Fetching prices…")
 def load_prices(bzn: str, start: str, end: str) -> pd.Series:
     return fetch_day_ahead(bzn, start, end)
 
 
-tab_mkt, tab_map = st.tabs(["Market (detail)", "Europe map"])
+@st.cache_data(show_spinner="Fetching German capacity auctions…")
+def load_products(day_iso: str) -> pd.DataFrame:
+    return fetch_products_de([dt.date.fromisoformat(day_iso)])
 
-# ---------------------------------------------------------------------------
-# TAB 1 — a single market in detail
-# ---------------------------------------------------------------------------
-with tab_mkt:
-    c = st.columns(3)
-    bzn = c[0].selectbox("Zone", list(ZONES), 0)
-    start = c[1].date_input("Start", pd.Timestamp("2026-06-22")).isoformat()
-    end = c[2].date_input("End", pd.Timestamp("2026-06-28")).isoformat()
 
-    try:
-        px = load_prices(bzn, start, end)
-    except Exception as e:
-        st.error(f"No prices for {bzn} {start}..{end}: {e}")
-        st.stop()
+def local_day(bzn: str, day: dt.date) -> pd.Series:
+    """One complete local (Europe/Berlin) day of hourly prices."""
+    px = load_prices(bzn, (day - dt.timedelta(days=1)).isoformat(),
+                     (day + dt.timedelta(days=1)).isoformat()).tz_convert("Europe/Berlin")
+    return px[px.index.date == day]
 
-    res = optimize(px, bat)
-    d = res.dispatch
 
-    h = px.index.hour
-    evening = px[(h >= 17) & (h <= 21)].resample("1D").max()
-    midday = px[(h >= 10) & (h <= 15)].resample("1D").min()
-    spread = (evening - midday).mean()
-
+def replay_views(ds: dict) -> None:
+    """Shared day view: split metrics, price+dispatch chart, capacity bands, SOC."""
+    sp = ds["split_eur"]
     m = st.columns(5)
-    m[0].metric("Ceiling €/MW/year", f"{res.revenue_per_mw_year:,.0f}")
-    m[1].metric("Payback (years)", f"{res.simple_payback_years:.1f}")
-    m[2].metric("Average price €/MWh", f"{px.mean():.0f}")
-    m[3].metric("Peak €/MWh", f"{px.max():.0f}")
-    m[4].metric("Evening spread", f"{spread:.0f} €")
+    m[0].metric("Stack total €", f"{ds['stack_eur']:,.0f}", f"{ds['uplift_pct']:+.0f}% vs DA-only")
+    m[1].metric("Day-ahead €", f"{sp.get('da_eur', 0):,.0f}")
+    m[2].metric("FCR €", f"{sp.get('fcr_eur', 0):,.0f}")
+    m[3].metric("aFRR pos €", f"{sp.get('afrr_pos_eur', 0):,.0f}")
+    m[4].metric("aFRR neg €", f"{sp.get('afrr_neg_eur', 0):,.0f}")
 
-    @st.cache_data(show_spinner="Running the realistic strategy (persistence)…")
-    def run_capture(bzn: str, start: str, end: str, p: float, dur: float, r: float,
-                    cx: float, cyc: float) -> tuple[float, float, int]:
-        d0 = (pd.Timestamp(start) - pd.Timedelta(days=1)).date().isoformat()
-        c = persistence_forecast(fetch_day_ahead(bzn, d0, end), Battery(p, dur, r, cx, cyc or None))
-        return c.ceiling_eur, c.revenue_eur, c.hours
+    d = ds["dispatch"]
+    idle = int(((d[["fcr", "afrr_pos", "afrr_neg"]].sum(axis=1) > 0.01)
+                & (d["charge"] + d["discharge"] < 0.01)).sum()) if "fcr" in d else 0
+    if idle:
+        st.markdown(panel(f"<b>{idle} of {len(d)} hours</b> earning capacity while standing "
+                          f"still — paid for headroom, not for energy.", C["amber"]),
+                    unsafe_allow_html=True)
 
-    try:
-        ceil_eur, real_eur, hours = run_capture(bzn, start, end, power, duration, rte, capex, cycles)
-        per_mw_y = 8760 / hours / power
-        st.markdown(capture_instrument(ceil_eur * per_mw_y, real_eur * per_mw_y,
-                                       real_eur / ceil_eur), unsafe_allow_html=True)
-    except Exception:
-        st.caption("Realistic strategy not computable for this period (needs at least the previous day).")
-
-    st.subheader("Price and profit points — green buys low · amber sells high")
     df = d.reset_index()
-    df.columns = ["t", "price", "charge", "discharge", "soc"]
+    df = df.rename(columns={df.columns[0]: "t"})
     base = alt.Chart(df).encode(x=alt.X("t:T", title=None))
     price_line = base.mark_line(color=C["muted"], strokeWidth=1.2, opacity=0.7).encode(
         y=alt.Y("price:Q", title="€/MWh"))
@@ -152,21 +190,145 @@ with tab_mkt:
             .encode(y="price:Q", size=alt.Size("discharge:Q", legend=None, scale=alt.Scale(range=[30, 300])),
                     tooltip=[alt.Tooltip("t:T", title="hour"), alt.Tooltip("price:Q", format=".0f"),
                              alt.Tooltip("discharge:Q", title="discharge MWh", format=".2f")]))
-    chart = ((price_line + buy + sell).interactive()
-             .configure_axis(labelFont="IBM Plex Mono", titleFont="IBM Plex Mono",
-                             labelColor=C["muted"], titleColor=C["muted"]))
-    st.altair_chart(chart, use_container_width=True)
+    st.subheader("Price and dispatch — green buys low · amber sells high")
+    st.altair_chart((price_line + buy + sell).interactive()
+                    .configure_axis(labelFont="IBM Plex Mono", titleFont="IBM Plex Mono",
+                                    labelColor=C["muted"], titleColor=C["muted"]),
+                    use_container_width=True)
+
+    if "fcr" in d.columns:
+        st.subheader("Committed capacity per 4h block (MW)")
+        long = df.melt(id_vars="t", value_vars=[c for c in ("fcr", "afrr_pos", "afrr_neg")
+                                                if c in df.columns],
+                       var_name="market", value_name="mw")
+        long["market"] = long["market"].map(MKT_LABEL)
+        band = (alt.Chart(long)
+                .mark_area(interpolate="step-after", opacity=0.55)
+                .encode(x=alt.X("t:T", title=None),
+                        y=alt.Y("mw:Q", stack=True, title="MW"),
+                        color=alt.Color("market:N", legend=alt.Legend(orient="top", title=None),
+                                        scale=alt.Scale(domain=[MKT_LABEL["fcr"],
+                                                                MKT_LABEL["afrr_pos"],
+                                                                MKT_LABEL["afrr_neg"]],
+                                                        range=[MKT["fcr"], MKT["afrr_pos"],
+                                                               MKT["afrr_neg"]])),
+                        tooltip=["t:T", "market:N", alt.Tooltip("mw:Q", format=".2f")]))
+        st.altair_chart(band.configure_axis(labelFont="IBM Plex Mono", titleFont="IBM Plex Mono",
+                                            labelColor=C["muted"], titleColor=C["muted"]),
+                        use_container_width=True)
 
     st.subheader("State of charge (SOC)")
-    st.area_chart(d["soc"], height=170, color=C["cyan"])
+    soc_ch = (alt.Chart(df).mark_area(color=C["cyan"], opacity=0.8)
+              .encode(x=alt.X("t:T", title=None), y=alt.Y("soc:Q", title="MWh"))
+              .properties(height=170)
+              .configure_axis(labelFont="IBM Plex Mono", titleFont="IBM Plex Mono",
+                              labelColor=C["muted"], titleColor=C["muted"]))
+    st.altair_chart(soc_ch, use_container_width=True)
+
+
+tab_today, tab_replay, tab_map, tab_trends = st.tabs(
+    ["Today", "Day replay", "Europe map", "Trends"])
 
 # ---------------------------------------------------------------------------
-# TAB 2 — Europe map: where the BESS pays off
+# TAB 1 — Today: live answers, zero input
+# ---------------------------------------------------------------------------
+with tab_today:
+    try:
+        px_yd = local_day("DE-LU", YESTERDAY)
+        prod_yd = load_products(YESTERDAY.isoformat())
+        if len(px_yd) != 24:
+            raise RuntimeError("DST day — 23/25 local hours")
+        ds = day_stack(px_yd, prod_yd, bat)
+        sp = ds["split_eur"]
+        bar = [(MKT[k], max(0.0, sp.get(f"{k}_eur", 0.0))) for k in MKT]
+        legend = [(MKT_LABEL[k], MKT[k], f"{sp.get(f'{k}_eur', 0):,.0f} €") for k in MKT]
+        st.markdown(instrument(
+            f"yesterday · {ds['date']} · germany (DE-LU) · {power:g} MW / {bat.capacity_mwh:g} MWh · real auction prices",
+            f"{ds['stack_eur']:,.0f} €",
+            f"arbitrage alone {ds['da_eur']:,.0f} € → stack {ds['uplift_pct']:+.0f}%",
+            bar, legend), unsafe_allow_html=True)
+    except Exception as e:
+        st.markdown(panel(f"Yesterday's stack unavailable ({e}) — markets data may lag.",
+                          C["red"]), unsafe_allow_html=True)
+
+    # ponytail: headline zones only — a full 35-zone sweep on first paint gets
+    # rate-limited by energy-charts; the complete ranking lives in Europe map.
+    HEADLINE_ZONES = {z: ZONES[z] for z in
+                      ("DE-LU", "FR", "NL", "BE", "ES", "HU", "RO", "PL", "IT-North", "NO1")}
+
+    @st.cache_data(show_spinner="Atlas: last 90 days, headline zones (first run ~1 min)…")
+    def atlas_90d(end_iso: str, p: float, dur: float, r: float, cx: float, cyc: float):
+        start = (dt.date.fromisoformat(end_iso) - dt.timedelta(days=90)).isoformat()
+        df, _ = run_atlas(start, end_iso, Battery(p, dur, r, cx, cyc or None),
+                          zones=HEADLINE_ZONES, capture=False)
+        return df
+
+    try:
+        df90 = atlas_90d(YESTERDAY.isoformat(), power, duration, rte, capex, cycles)
+        st.markdown(headline_list(atlas_headlines(df90)), unsafe_allow_html=True)
+    except Exception as e:
+        st.markdown(panel(f"Atlas headlines unavailable: {e}", C["red"]), unsafe_allow_html=True)
+
+    st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="eyebrow">what information is worth — DE-LU, last 30 days, '
+                'this battery</div>', unsafe_allow_html=True)
+
+    @st.cache_data(show_spinner="Computing the information ladder (≈1 min, then cached)…")
+    def info_ladder(end_iso: str, p: float, dur: float, r: float, cx: float, cyc: float):
+        b = Battery(p, dur, r, cx, cyc or None)
+        start = (dt.date.fromisoformat(end_iso) - dt.timedelta(days=30)).isoformat()
+        px = fetch_day_ahead("DE-LU", start, end_iso)
+        roll = rolling_day_ahead(px, b)
+        pers = persistence_forecast(px, b)
+        seq = run_sequential(start, end_iso, b)
+        return roll.ratio, pers.ratio, seq["capture"]
+
+    try:
+        r_roll, r_pers, r_seq = info_ladder(YESTERDAY.isoformat(), power, duration, rte,
+                                            capex, cycles)
+        rows = (gauge_row("perfect foresight", "100%", 1.0, C["muted"])
+                + gauge_row("day-ahead horizon", f"{r_roll:.1%}", r_roll, C["cyan"])
+                + gauge_row("naive forecast", f"{r_pers:.1%}", r_pers, C["cyan"])
+                + gauge_row("stack, operated", f"{r_seq:.1%}", r_seq, C["amber"]))
+        st.markdown(f'<div style="background:{C["surface"]};border:1px solid {C["border"]};'
+                    f'border-radius:6px;padding:14px 18px;">{rows}</div>',
+                    unsafe_allow_html=True)
+        st.caption("Each step down is the price of less information: the day-ahead horizon "
+                   "costs a few percent, a naive price forecast ~15%, and bidding reserve "
+                   "capacity pay-as-bid with yesterday's information leaves ~30% of the "
+                   "stacked ceiling on the table.")
+    except Exception as e:
+        st.markdown(panel(f"Information ladder unavailable: {e}", C["red"]),
+                    unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# TAB 2 — Day replay: watch the co-optimized battery work a real day
+# ---------------------------------------------------------------------------
+with tab_replay:
+    c = st.columns(3)
+    rday = c[0].date_input("Day (DE-LU + German reserve auctions)", YESTERDAY,
+                           min_value=dt.date(2020, 7, 1), max_value=YESTERDAY)
+    try:
+        px_day = local_day("DE-LU", rday)
+        if len(px_day) != 24:
+            st.markdown(panel("DST switch day (23/25 local hours) — replay needs a plain "
+                              "24h day.", C["red"]), unsafe_allow_html=True)
+        else:
+            ds = day_stack(px_day, load_products(rday.isoformat()), bat)
+            replay_views(ds)
+            st.caption("Co-optimized with hindsight: the ceiling view of this day. FCR at the "
+                       "German clearing price; aFRR at the mean accepted bid (pay-as-bid), "
+                       "capacity only — activation energy not modeled.")
+    except Exception as e:
+        st.markdown(panel(f"No data for {rday}: {e}", C["red"]), unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# TAB 3 — Europe map: where the BESS pays off
 # ---------------------------------------------------------------------------
 with tab_map:
     cc = st.columns(3)
     mstart = cc[0].date_input("Period start", pd.Timestamp("2026-04-01"), key="ms").isoformat()
-    mend = cc[1].date_input("Period end", pd.Timestamp("2026-06-28"), key="me").isoformat()
+    mend = cc[1].date_input("Period end", pd.Timestamp(YESTERDAY), key="me").isoformat()
     cap_on = cc[2].toggle("Capture per zone", value=False,
                           help="Rolling day-ahead and persistence for every zone: "
                                "the first computation can take ~2 minutes.")
@@ -176,10 +338,26 @@ with tab_map:
                    cyc: float, capture: bool) -> tuple[pd.DataFrame, list[str]]:
         return run_atlas(start, end, Battery(p, dur, r, cx, cyc or None), capture=capture)
 
-    dfm, errs = zone_atlas(mstart, mend, power, duration, rte, capex, cycles, cap_on)
-    if dfm.empty:
-        st.error("No zone returned data for the selected period.")
-        st.stop()
+    ss0 = st.session_state
+    ss0.setdefault("atlas_requested", False)
+    # ponytail: ~35 zones on page load starves the tabs below and trips the
+    # energy-charts rate limiter — the full sweep runs only on explicit request.
+    if st.button("Run the atlas for this period (~35 zones, minutes on first run)"):
+        ss0["atlas_requested"] = True
+    dfm = pd.DataFrame()
+    if ss0["atlas_requested"]:
+        dfm, errs = zone_atlas(mstart, mend, power, duration, rte, capex, cycles, cap_on)
+        if dfm.empty:
+            st.markdown(panel("No zone returned data for the selected period.", C["red"]),
+                        unsafe_allow_html=True)
+    else:
+        st.markdown(panel("The full European sweep is on demand — press the button. "
+                          "The headline zones are already on the Today tab.", C["amber"]),
+                    unsafe_allow_html=True)
+
+if not dfm.empty:
+  with tab_map:
+    st.markdown(headline_list(atlas_headlines(dfm)), unsafe_allow_html=True)
 
     dfm = dfm.rename(columns={"ceiling_eur_mw_y": "rev", "payback_y": "payback"})
     lo, hi = dfm["rev"].min(), dfm["rev"].max()
@@ -274,3 +452,32 @@ with tab_map:
     st.caption("Perfect-foresight ceiling per zone: same BESS, same period. "
                "Capture: rolling = LP on same-day prices (day-ahead auction view); "
                "persistence = yesterday's prices as forecast, settled against today's real prices.")
+
+# ---------------------------------------------------------------------------
+# TAB 4 — Trends: the widening duck curve
+# ---------------------------------------------------------------------------
+with tab_trends:
+    tz = st.selectbox("Zone", list(ZONES), 0, key="trend_zone")
+    try:
+        px_hist = load_prices(tz, "2026-01-01", YESTERDAY.isoformat()).tz_convert("Europe/Berlin")
+        sp = monthly_spread(px_hist).reset_index()
+        sp.columns = ["month", "spread_eur"]
+        # string labels: Vega would re-read tz-aware timestamps as UTC and
+        # shift every month label back by one
+        sp["month"] = sp["month"].dt.strftime("%b %Y")
+        st.subheader("Evening peak minus midday trough — average daily spread by month")
+        ch = (alt.Chart(sp).mark_bar(color=C["amber"], size=34)
+              .encode(x=alt.X("month:N", title=None, sort=None,
+                              axis=alt.Axis(labelAngle=0)),
+                      y=alt.Y("spread_eur:Q", title="€/MWh"),
+                      tooltip=[alt.Tooltip("month:N", title="month"),
+                               alt.Tooltip("spread_eur:Q", format=".0f", title="spread €")])
+              .configure_axis(labelFont="IBM Plex Mono", titleFont="IBM Plex Mono",
+                              labelColor=C["muted"], titleColor=C["muted"]))
+        st.altair_chart(ch, use_container_width=True)
+        st.caption("The spread — not the price level — is what a battery earns. More solar "
+                   "pushes middays toward zero and steepens evening ramps, so this bar is "
+                   "the structural tailwind behind every number in this app. Months with "
+                   "fewer than 15 complete days are hidden.")
+    except Exception as e:
+        st.markdown(panel(f"No trend data for {tz}: {e}", C["red"]), unsafe_allow_html=True)
