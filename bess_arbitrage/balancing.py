@@ -56,11 +56,12 @@ def fetch_fcr_de(day: dt.date) -> list[float]:
     return [px[f"NEGPOS_{b}"] for b in BLOCKS]
 
 
-def fetch_afrr_de(day: dt.date) -> tuple[list[float], list[float]]:
+def fetch_afrr_de(day: dt.date, stat: str = "mean") -> tuple[list[float], list[float]]:
     """aFRR capacity price DE (pos, neg), EUR/MW per 4h block.
 
-    Pay-as-bid market: mean accepted price is a conservative estimate of what
-    a price-taker earns; the API reports EUR/MW/h, we return per-block (x4).
+    Pay-as-bid market: `mean` accepted price is a conservative estimate of what
+    a price-taker earns; `max` is the marginal accepted bid (the award threshold
+    for a bidding simulation). The API reports EUR/MW/h, we return per-block (x4).
     """
     j = _get(f"/tenders/SRL_{day:%Y%m%d}_D1/aggregated-results/de",
              cacheable=day < dt.date.today())
@@ -68,17 +69,19 @@ def fetch_afrr_de(day: dt.date) -> tuple[list[float], list[float]]:
     for r in j:
         f = r["fourHourResult"]
         if f.get("capacityPrice"):
-            px[f["productName"]] = float(f["capacityPrice"]["mean"]) * 4
+            px[f["productName"]] = float(f["capacityPrice"][stat]) * 4
     return ([px[f"POS_{b}"] for b in BLOCKS], [px[f"NEG_{b}"] for b in BLOCKS])
 
 
-def fetch_products_de(days: list[dt.date], pause_s: float = 0.3) -> pd.DataFrame:
+def fetch_products_de(days: list[dt.date], pause_s: float = 0.3,
+                      stat: str = "mean") -> pd.DataFrame:
     """Products frame for optimize(): 6 rows per day (fcr, afrr_pos, afrr_neg),
-    EUR/MW per 4h block, in day order — block i of day d = local hours 4i..4i+3."""
+    EUR/MW per 4h block, in day order — block i of day d = local hours 4i..4i+3.
+    stat picks the aFRR statistic (mean/max/min); FCR is always the clearing price."""
     rows = []
     for d in days:
         fcr = fetch_fcr_de(d)
-        pos, neg = fetch_afrr_de(d)
+        pos, neg = fetch_afrr_de(d, stat)
         rows += [{"fcr": fcr[i], "afrr_pos": pos[i], "afrr_neg": neg[i]}
                  for i in range(len(BLOCKS))]
         if pause_s:

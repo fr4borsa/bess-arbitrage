@@ -120,6 +120,24 @@ pay-as-cleared clearing price; aFRR at the **mean** accepted bid (the market is
 pay-as-bid — conservative for a 1 MW price-taker); perfect foresight on all
 prices, consistent with the ceiling framing everywhere else in this repo.
 
+`--sequential` drops the hindsight and simulates the real gate sequence:
+plan each day with the LP run on *yesterday's* prices, bid aFRR capacity at
+yesterday's mean (pay-as-bid: awarded only if the bid clears today's marginal
+accepted price), take FCR as a price-taker at the clearing, then dispatch the
+real day with the awarded commitments as fixed constraints, SOC chained.
+
+```
+sequential DE 2026-06-01..2026-06-30 — 696 h settled (day 1 skipped)
+  stacked ceiling :     24,879 EUR
+  sequential ops  :     17,670 EUR  -> stack capture 71.0%
+  split           : {'da': 5512, 'fcr': 4293, 'afrr': 7865} EUR
+```
+
+That 71% is the stack's analogue of the capture ratio: the cost of bidding
+with yesterday's information in a pay-as-bid market. Even operated this
+naively, the stack beats the *perfect-foresight* DA-only ceiling for the same
+month by a wide margin.
+
 ## Checks
 
 ```bash
@@ -136,8 +154,9 @@ uv run python -m bess_arbitrage.balancing     # live API smoke test (regelleistu
 1. ~~**Capture-ratio atlas**~~ — shipped 2026-07: the LP engine across ~35 EU
    bidding zones, ceiling / capture rankings on the map, CLI + CSV export.
 2. ~~**Multi-market stack**~~ — shipped 2026-07: FCR + aFRR capacity co-optimized
-   with day-ahead arbitrage (capacity-only floor, documented methodology) and a
-   monthly DE benchmark CLI. Next within this thread: aFRR activation energy,
+   with day-ahead arbitrage (capacity-only floor, documented methodology), a
+   monthly DE benchmark CLI, and a gate-by-gate sequential simulation (stack
+   capture ratio). Next within this thread: aFRR activation energy,
    auto-published monthly report.
 3. **Battery realism** — degradation-aware dispatch; grid-fee and
    connection-constraint impacts on the business case.

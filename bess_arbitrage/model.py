@@ -49,6 +49,7 @@ BLOCK_H = 4  # DE capacity products (FCR, aFRR) clear in 4h blocks
 
 def optimize(prices: pd.Series, bat: Battery, soc0: float = 0.0,
              products: pd.DataFrame | None = None,
+             committed: pd.DataFrame | None = None,
              fcr_reserve_h: float = 0.25, afrr_reserve_h: float = 1.0) -> Result:
     """Maximize arbitrage revenue over the given hourly price series [EUR/MWh].
 
@@ -57,10 +58,16 @@ def optimize(prices: pd.Series, bat: Battery, soc0: float = 0.0,
       (block i = hours 4i..4i+3), columns among {fcr, afrr_pos, afrr_neg}.
       Co-optimizes capacity commitment with dispatch. Capacity-only floor:
       no activation energy is modeled.
+    committed: optional FIXED capacity commitments [MW per block, same columns]
+      already awarded in earlier auctions — enforced as headroom constraints
+      only; capacity revenue is settled outside the LP. Mutually exclusive
+      with products.
     fcr_reserve_h / afrr_reserve_h: SOC headroom [h × MW committed]. FCR: DE
       prequalification requires full power for 15 min, both directions. aFRR:
       activations persist, 1 h in the product's own direction is conservative.
     """
+    if products is not None and committed is not None:
+        raise ValueError("pass either products (co-optimize) or committed (fixed), not both")
     p = prices.to_list()
     n = len(p)
     eff = math.sqrt(bat.rte)  # per-leg efficiency
@@ -99,6 +106,23 @@ def optimize(prices: pd.Series, bat: Battery, soc0: float = 0.0,
                     + afrr_reserve_h * (ap[b] if ap else zero)
                 m += cap - soc[t] >= fcr_reserve_h * (fcr[b] if fcr else zero) \
                     + afrr_reserve_h * (an[b] if an else zero)
+    if committed is not None:
+        nb = n // BLOCK_H
+        if len(committed) != nb:
+            raise ValueError(f"committed has {len(committed)} rows, expected {nb}")
+        for b in range(nb):
+            row = committed.iloc[b]
+            fc = float(row.get("fcr", 0.0) or 0.0)
+            po = float(row.get("afrr_pos", 0.0) or 0.0)
+            ne = float(row.get("afrr_neg", 0.0) or 0.0)
+            e_up = fcr_reserve_h * fc + afrr_reserve_h * po
+            e_dn = fcr_reserve_h * fc + afrr_reserve_h * ne
+            for t in range(b * BLOCK_H, (b + 1) * BLOCK_H):
+                m += dis[t] <= pmax - (fc + po)
+                m += chg[t] <= pmax - (fc + ne)
+                m += soc[t] >= e_up
+                m += soc[t] <= cap - e_dn
+
     cap_rev = pulp.lpSum(
         float(products[col].iloc[b]) * cvars[col][b]
         for col in cvars for b in range(len(cvars[col]))) if cvars else 0.0
