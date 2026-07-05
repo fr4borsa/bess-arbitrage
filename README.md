@@ -1,5 +1,7 @@
 # bess-arbitrage
 
+[![ci](https://github.com/fr4borsa/bess-arbitrage/actions/workflows/ci.yml/badge.svg)](https://github.com/fr4borsa/bess-arbitrage/actions/workflows/ci.yml)
+
 Perfect-foresight battery-storage (BESS) arbitrage revenue for European day-ahead
 power markets. Given real spot prices, it computes the **revenue ceiling** an
 optimally-dispatched battery could have earned — the upper bound any forecast-based
@@ -70,10 +72,11 @@ captures ~84% of perfect foresight — the gap a real price forecast has to clos
 uv run streamlit run app.py
 ```
 
-Two views: a single market in detail (price series + optimal dispatch), and a
-Europe map — click a bidding zone to place a battery there and get its revenue
-ceiling, capture ratio, and payback. A toggle adds per-zone capture ratios to
-the map and the ranking table.
+Four insight-first tabs: **Today** (yesterday's DE stack, atlas headlines, the
+information ladder), **Day replay** (any settled day: price, optimal dispatch,
+committed capacity, SoC), **Europe map** (click a bidding zone to place a
+battery and get ceiling, capture and payback; optional per-zone capture sweep)
+and **Trends** (monthly evening-spread trend per zone).
 
 ## Atlas — every zone at once
 
@@ -147,7 +150,11 @@ uv run python -m bess_arbitrage.prices   # live API smoke test (last 7 days DE-L
 uv run python -m bess_arbitrage.atlas --demo  # offline atlas self-check (synthetic zones)
 uv run python -m bess_arbitrage.bench --demo  # offline stack-benchmark self-check
 uv run python -m bess_arbitrage.balancing     # live API smoke test (regelleistung.net, one day)
+uv run pytest -q                              # LP invariants on synthetic data (offline)
+uv run python -m bess_arbitrage.report --month 2026-06  # regenerate a monthly report
 ```
+
+CI runs the offline checks and the invariant tests on every push.
 
 ## Roadmap (building in public)
 
@@ -156,8 +163,10 @@ uv run python -m bess_arbitrage.balancing     # live API smoke test (regelleistu
 2. ~~**Multi-market stack**~~ — shipped 2026-07: FCR + aFRR capacity co-optimized
    with day-ahead arbitrage (capacity-only floor, documented methodology), a
    monthly DE benchmark CLI, and a gate-by-gate sequential simulation (stack
-   capture ratio). Next within this thread: aFRR activation energy,
-   auto-published monthly report.
+   capture ratio). ~~Auto-published monthly report~~ — shipped 2026-07: a
+   GitHub Action writes `reports/YYYY-MM.md` on the 2nd of each month
+   (bench + sequential + atlas headlines + spread trend). Next within this
+   thread: aFRR activation energy.
 3. **Battery realism** — degradation-aware dispatch; grid-fee and
    connection-constraint impacts on the business case.
 

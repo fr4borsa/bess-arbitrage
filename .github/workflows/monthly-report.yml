@@ -1,0 +1,35 @@
+name: monthly-report
+
+on:
+  schedule:
+    - cron: "17 6 2 * *"   # 2nd of the month, 06:17 UTC — previous month is fully settled
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "YYYY-MM (default: previous month)"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - name: generate report
+        run: |
+          if [ -n "${{ github.event.inputs.month }}" ]; then
+            uv run python -m bess_arbitrage.report --month "${{ github.event.inputs.month }}"
+          else
+            uv run python -m bess_arbitrage.report
+          fi
+      - name: commit report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          git diff --cached --quiet || git commit -m "report: $(ls -t reports | head -1)"
+          git push

@@ -1,0 +1,62 @@
+"""LP invariants on synthetic data — offline, fast. These are the properties
+that must hold no matter what the prices look like; if one breaks, the engine
+is wrong, not the market.
+"""
+import numpy as np
+import pandas as pd
+import pytest
+
+from bess_arbitrage.capture import persistence_forecast, rolling_day_ahead
+from bess_arbitrage.model import Battery, optimize
+
+
+@pytest.fixture
+def prices() -> pd.Series:
+    # 6 synthetic days with a two-peak shape and day-to-day drift
+    day = np.array([30, 25, 20, 15, 10, 12, 40, 80, 90, 60, 30, 10,
+                    5, 8, 20, 45, 90, 140, 160, 120, 80, 60, 45, 35], dtype=float)
+    px = np.concatenate([day * (1 + 0.1 * d) for d in range(6)])
+    idx = pd.date_range("2025-03-01", periods=len(px), freq="1h", tz="UTC")
+    return pd.Series(px, index=idx)
+
+
+@pytest.fixture
+def bat() -> Battery:
+    return Battery(power_mw=1.0, duration_h=2.0, rte=0.85, max_cycles_per_day=1.5)
+
+
+def test_dispatch_within_bounds(prices, bat):
+    r = optimize(prices, bat)
+    d = r.dispatch
+    assert (d["soc"] >= -1e-6).all() and (d["soc"] <= bat.capacity_mwh + 1e-6).all()
+    assert (d["charge"] >= -1e-6).all() and (d["charge"] <= bat.power_mw + 1e-6).all()
+    assert (d["discharge"] >= -1e-6).all() and (d["discharge"] <= bat.power_mw + 1e-6).all()
+
+
+def test_cycle_cap_respected(prices, bat):
+    r = optimize(prices, bat)
+    days = r.hours // 24
+    assert r.dispatch["discharge"].sum() <= bat.max_cycles_per_day * bat.capacity_mwh * days + 1e-6
+
+
+def test_capture_ratios_bounded(prices, bat):
+    # Both variants are feasible for the whole-window LP => revenue <= ceiling.
+    assert 0 < rolling_day_ahead(prices, bat).ratio <= 1 + 1e-9
+    assert persistence_forecast(prices, bat).ratio <= 1 + 1e-9
+
+
+def test_stack_never_below_da_only(prices, bat):
+    products = pd.DataFrame({
+        "fcr": [25.0] * 36, "afrr_pos": [8.0] * 36, "afrr_neg": [4.0] * 36,
+    })
+    da = optimize(prices, bat)
+    stack = optimize(prices, bat, products=products)
+    # Capacity prices are >= 0, so co-optimization can only add revenue.
+    assert stack.revenue_eur >= da.revenue_eur - 1e-6
+    assert abs(sum(stack.stack.values()) - stack.revenue_eur) < 1e-6
+
+
+def test_more_cycles_never_earn_less(prices):
+    tight = optimize(prices, Battery(max_cycles_per_day=1.0)).revenue_eur
+    loose = optimize(prices, Battery(max_cycles_per_day=2.0)).revenue_eur
+    assert loose >= tight - 1e-6

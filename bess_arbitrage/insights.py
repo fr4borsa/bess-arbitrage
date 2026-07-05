@@ -27,23 +27,23 @@ def day_stack(px_day: pd.Series, products_day: pd.DataFrame, bat: Battery) -> di
 
 def atlas_headlines(df: pd.DataFrame, ref: str = "DE-LU") -> list[str]:
     """Auto-generated one-liners from an atlas ranking (as returned by
-    run_atlas: zona / ceiling_eur_mw_y / price_mean, capture_* optional)."""
+    run_atlas: zone / ceiling_eur_mw_y / price_mean, capture_* optional)."""
     out: list[str] = []
     if df.empty:
         return out
     d = df.sort_values("ceiling_eur_mw_y", ascending=False).reset_index(drop=True)
     top = d.iloc[0]
-    if ref in set(d.zona) and top.zona != ref:
-        ref_rev = float(d.loc[d.zona == ref, "ceiling_eur_mw_y"].iloc[0])
-        out.append(f"{top.zona} leads at {top.ceiling_eur_mw_y / 1e3:,.0f}k €/MW/y — "
+    if ref in set(d.zone) and top.zone != ref:
+        ref_rev = float(d.loc[d.zone == ref, "ceiling_eur_mw_y"].iloc[0])
+        out.append(f"{top.zone} leads at {top.ceiling_eur_mw_y / 1e3:,.0f}k €/MW/y — "
                    f"{(top.ceiling_eur_mw_y / ref_rev - 1) * 100:+.0f}% vs {ref}. "
                    f"Batteries earn the spread, not the price level.")
     else:
-        out.append(f"{top.zona} leads at {top.ceiling_eur_mw_y / 1e3:,.0f}k €/MW/y.")
+        out.append(f"{top.zone} leads at {top.ceiling_eur_mw_y / 1e3:,.0f}k €/MW/y.")
     priciest = d.loc[d.price_mean.idxmax()]
-    if priciest.zona != top.zona:
-        rank = int(d.index[d.zona == priciest.zona][0]) + 1
-        out.append(f"Highest average price ≠ best battery zone: {priciest.zona} averages "
+    if priciest.zone != top.zone:
+        rank = int(d.index[d.zone == priciest.zone][0]) + 1
+        out.append(f"Highest average price ≠ best battery zone: {priciest.zone} averages "
                    f"{priciest.price_mean:.0f} €/MWh but ranks #{rank} — flat days pay nothing.")
     if "capture_persistence" in d and d.capture_persistence.notna().all():
         out.append(f"A naive forecast (yesterday = tomorrow) keeps "
@@ -77,7 +77,7 @@ def _demo() -> None:
     assert len(sp) == 2 and sp.spread_eur.iloc[1] > sp.spread_eur.iloc[0], sp
 
     atlas = pd.DataFrame({
-        "zona": ["HU", "DE-LU", "NO1"],
+        "zone": ["HU", "DE-LU", "NO1"],
         "ceiling_eur_mw_y": [156_000.0, 126_000.0, 40_000.0],
         "price_mean": [106.0, 94.0, 120.0],
         "capture_rolling": [.985, .978, .99],

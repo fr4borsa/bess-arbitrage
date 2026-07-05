@@ -1,0 +1,23 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --dev
+      - name: pytest (LP invariants)
+        run: uv run pytest -q
+      - name: offline smoke checks
+        run: |
+          uv run python -m bess_arbitrage.model
+          uv run python -m bess_arbitrage.capture
+          uv run python -m bess_arbitrage.insights
+          uv run python -m bess_arbitrage.atlas --demo
+          uv run python -m bess_arbitrage.bench --demo

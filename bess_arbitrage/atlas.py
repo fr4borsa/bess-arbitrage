@@ -68,7 +68,7 @@ def run_atlas(start: str, end: str, bat: Battery,
     for z, (lat, lon) in zones.items():
         try:
             px = fetch(z, start, end)
-            rows.append({"zona": z, "lat": lat, "lon": lon} | zone_metrics(px, bat, capture))
+            rows.append({"zone": z, "lat": lat, "lon": lon} | zone_metrics(px, bat, capture))
         except Exception:
             skipped.append(z)
         if pause_s:
@@ -128,11 +128,11 @@ def _demo() -> None:
     df, skipped = run_atlas("2025-01-01", "2025-01-04", Battery(), zones,
                             fetch=fake_fetch, pause_s=0.0)
     assert not skipped, skipped
-    assert list(df["zona"]) == ["VOLATILE", "FLAT"], list(df["zona"])
+    assert list(df["zone"]) == ["VOLATILE", "FLAT"], list(df["zone"])
     for c in ("capture_rolling", "capture_persistence"):
         assert ((df[c] > 0) & (df[c] <= 1 + 1e-9)).all(), df[c]
     print("demo ok:")
-    print(df[["zona", "ceiling_eur_mw_y", "capture_rolling", "capture_persistence"]]
+    print(df[["zone", "ceiling_eur_mw_y", "capture_rolling", "capture_persistence"]]
           .to_string(index=False))
 
 

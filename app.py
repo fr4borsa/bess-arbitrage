@@ -389,7 +389,7 @@ if not dfm.empty:
       .leaflet-popup-close-button {{ color: {C['muted']}; }}
     </style>"""))
     for z in dfm.itertuples():
-        tip = f"{z.zona}: {z.rev:,.0f} €/MW/year · payback {z.payback:.1f}y"
+        tip = f"{z.zone}: {z.rev:,.0f} €/MW/year · payback {z.payback:.1f}y"
         if cap_on:
             tip += f" · capture {z.capture_rolling:.0%} / {z.capture_persistence:.0%}"
         folium.CircleMarker(
@@ -400,7 +400,7 @@ if not dfm.empty:
     for p in ss.placements:
         folium.Marker(
             [p["lat"], p["lon"]], icon=folium.Icon(color="orange", icon="bolt", prefix="fa"),
-            popup=f"{power:g} MW / {duration:g}h → {p['zona']}<br>"
+            popup=f"{power:g} MW / {duration:g}h → {p['zone']}<br>"
                   f"<b>{p['rev']:,.0f} €/MW/year</b> · payback {p['payback']:.1f}y",
         ).add_to(fmap)
 
@@ -411,9 +411,9 @@ if not dfm.empty:
         key = (round(click["lat"], 5), round(click["lng"], 5))
         if key not in ss.done_clicks:
             ss.done_clicks.add(key)
-            # ponytail: zona = nearest centroid, no polygons; add zone geojson if border precision is ever needed
+            # ponytail: zone = nearest centroid, no polygons; add zone geojson if border precision is ever needed
             zrow = dfm.loc[((dfm.lat - key[0]) ** 2 + (dfm.lon - key[1]) ** 2).idxmin()]
-            ss.placements.append({"lat": key[0], "lon": key[1], "zona": zrow.zona,
+            ss.placements.append({"lat": key[0], "lon": key[1], "zone": zrow.zone,
                                   "rev": zrow.rev, "payback": zrow.payback})
             st.rerun()
 
@@ -421,21 +421,21 @@ if not dfm.empty:
         last = ss.placements[-1]
         tot = sum(p["rev"] for p in ss.placements) * power
         c = st.columns(3)
-        c[0].metric(f"Last: {last['zona']} — €/MW/year", f"{last['rev']:,.0f}",
-                    f"{(last['rev'] / best.rev - 1) * 100:+.0f}% vs best ({best.zona})")
+        c[0].metric(f"Last: {last['zone']} — €/MW/year", f"{last['rev']:,.0f}",
+                    f"{(last['rev'] / best.rev - 1) * 100:+.0f}% vs best ({best.zone})")
         c[1].metric("Portfolio", f"{len(ss.placements)} BESS", f"{tot:,.0f} €/year total")
-        if last["zona"] == best.zona:
+        if last["zone"] == best.zone:
             c[2].markdown(panel("Best zone found: here capture matters most.",
                                 C["green"]), unsafe_allow_html=True)
         else:
-            c[2].markdown(panel(f"The best zone is <b>{best.zona}</b> — worth "
+            c[2].markdown(panel(f"The best zone is <b>{best.zone}</b> — worth "
                                 f"<span class='mono'>{best.rev - last['rev']:,.0f}</span> €/MW/year more.",
                                 C["amber"]), unsafe_allow_html=True)
         if st.button("Clear portfolio"):
             ss.placements, ss.done_clicks = [], set()
             st.rerun()
 
-    tbl_cols = ["zona", "rev", "payback"] + (
+    tbl_cols = ["zone", "rev", "payback"] + (
         ["capture_rolling", "capture_persistence"] if cap_on else [])
     names = {"rev": "€/MW/year", "payback": "payback (years)",
              "capture_rolling": "capture rolling", "capture_persistence": "capture persistence"}
