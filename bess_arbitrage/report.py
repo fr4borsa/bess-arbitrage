@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from .activation import sequential_activation_band
 from .atlas import ZONES, run_atlas
 from .bench import run_bench, run_sequential
 from .insights import atlas_headlines, monthly_spread
@@ -39,6 +40,7 @@ def build_report(month: str, bat: Battery) -> str:
     start, end = month_bounds(month)
     bench = run_bench(start, end, bat)
     seq = run_sequential(start, end, bat)
+    band = sequential_activation_band(seq["awards"], seq["px"])
 
     # Spread trend: 6 months of context ending with the report month.
     trend_start = f"{previous_month(date(int(month[:4]), int(month[5:7]), 1) - pd.Timedelta(days=150))}-01"
@@ -89,6 +91,19 @@ def build_report(month: str, bat: Battery) -> str:
         f"Split: {split_s}. FCR bid as price-taker at the clearing price; aFRR pay-as-bid "
         f"at yesterday's mean, awarded only when in merit.",
         "",
+        "### aFRR activation margin (v1 estimate)",
+        "",
+        "| activation depth | margin (EUR) | vs sequential | extra throughput |",
+        "|---|---:|---:|---:|",
+        *[f"| {d:.0%} of the merit order | {m['uplift_eur']:+,.0f} | "
+          f"{m['uplift_eur'] / seq['seq_eur']:+.1%} | {m['throughput_mwh']:,.0f} MWh |"
+          for d, m in band.items()],
+        "",
+        "Depth = average activated fraction of the merit order (duty) AND settlement "
+        "depth, coupled; energy bid at 5% of the MOL; SoC restored at the day-ahead "
+        "price. Depth is a scenario, not data: calibration against activated volumes "
+        "needs a netztransparenz/ENTSO-E token.",
+        "",
         "## Evening spread trend (DE-LU, evening peak minus midday trough)",
         "",
         spread.round(1).to_markdown(),
@@ -102,9 +117,10 @@ def build_report(month: str, bat: Battery) -> str:
         lines += [f"Zones skipped (no data): {', '.join(skipped)}", ""]
     lines += [
         "---",
-        "*Method: perfect-foresight LP ceiling (HiGHS); capacity revenue only, aFRR "
-        "activation energy not modeled yet; capture ratios show what realistic "
-        "information keeps of that ceiling. Details in the repo README.*",
+        "*Method: perfect-foresight LP ceiling (HiGHS); stack revenue is capacity-only, "
+        "with the aFRR activation margin reported separately as a scenario band (v1); "
+        "capture ratios show what realistic information keeps of that ceiling. "
+        "Details in the repo README.*",
     ]
     return "\n".join(lines)
 

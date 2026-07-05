@@ -81,6 +81,7 @@ def run_sequential(start: str, end: str, bat: Battery,
     cols = ("fcr", "afrr_pos", "afrr_neg")
     soc = 0.0
     da_eur = fcr_eur = afrr_eur = 0.0
+    awards: dict = {}  # date -> awarded aFRR MW per block, for the activation layer
     for i in range(1, len(days)):
         yday_prod = mean_all.iloc[(i - 1) * 6: i * 6].reset_index(drop=True)
         today_mean = mean_all.iloc[i * 6: (i + 1) * 6].reset_index(drop=True)
@@ -100,6 +101,7 @@ def run_sequential(start: str, end: str, bat: Battery,
         ex = optimize(days[i], bat, soc0=soc, committed=pd.DataFrame(awarded))
         da_eur += ex.revenue_eur
         soc = max(0.0, ex.dispatch["soc"].iloc[-1])
+        awards[dates[i]] = {"afrr_pos": awarded["afrr_pos"], "afrr_neg": awarded["afrr_neg"]}
 
     settled = pd.concat(days[1:])
     ceiling = optimize(settled, bat, products=mean_all.iloc[6:].reset_index(drop=True))
@@ -109,6 +111,7 @@ def run_sequential(start: str, end: str, bat: Battery,
         "capture": total / ceiling.revenue_eur if ceiling.revenue_eur else float("nan"),
         "split_eur": {"da": da_eur, "fcr": fcr_eur, "afrr": afrr_eur},
         "hours": len(settled),
+        "awards": awards, "px": settled,
     }
 
 
@@ -122,6 +125,8 @@ def main() -> None:
     ap.add_argument("--cycles", type=float, default=1.5)
     ap.add_argument("--sequential", action="store_true",
                     help="also simulate gate-by-gate operation on yesterday's info")
+    ap.add_argument("--activation", action="store_true",
+                    help="with --sequential: add the aFRR activation-margin band (v1, MOL-based)")
     a = ap.parse_args()
     bat = Battery(a.power, a.duration, a.rte, max_cycles_per_day=a.cycles or None)
 
@@ -132,6 +137,17 @@ def main() -> None:
         print(f"  stacked ceiling : {s['ceiling_eur']:>10,.0f} EUR")
         print(f"  sequential ops  : {s['seq_eur']:>10,.0f} EUR  -> stack capture {s['capture']:.1%}")
         print(f"  split           : {split} EUR")
+        if a.activation:
+            from .activation import sequential_activation_band
+            band = sequential_activation_band(s["awards"], s["px"])
+            print("  aFRR activation margin (v1: depth = duty AND settlement depth, bid at 5% of the MOL):")
+            for depth, m in band.items():
+                cyc = m["throughput_mwh"] / bat.capacity_mwh
+                print(f"    depth {depth:.0%}: {m['uplift_eur']:>+9,.0f} EUR "
+                      f"({m['uplift_eur'] / s['seq_eur']:+.1%} vs seq) · "
+                      f"+{m['throughput_mwh']:,.0f} MWh throughput (~{cyc:.0f} eq. cycles)")
+            print("    NOTE: activation depth is a scenario, not data — calibrate with"
+                  " activated volumes (netztransparenz/ENTSO-E) when available.")
         return
 
     r = run_bench(a.start, a.end, bat)

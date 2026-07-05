@@ -165,8 +165,13 @@ CI runs the offline checks and the invariant tests on every push.
    monthly DE benchmark CLI, and a gate-by-gate sequential simulation (stack
    capture ratio). ~~Auto-published monthly report~~ — shipped 2026-07: a
    GitHub Action writes `reports/YYYY-MM.md` on the 2nd of each month
-   (bench + sequential + atlas headlines + spread trend). Next within this
-   thread: aFRR activation energy.
+   (bench + sequential + atlas headlines + spread trend).
+   ~~aFRR activation energy~~ — shipped 2026-07 (v1): the ENERGY-market merit
+   order from regelleistung.net (bid-level, sign-normalized to
+   price-received-by-provider) prices a hypothetical bid at 5% of the MOL,
+   settled at the marginal price at a parametric activation depth
+   (5/15/30% scenarios — depth needs activated-volume data to become a fact).
+   `bench --sequential --activation` and a report section carry the band.
 3. **Battery realism** — degradation-aware dispatch; grid-fee and
    connection-constraint impacts on the business case.
 
