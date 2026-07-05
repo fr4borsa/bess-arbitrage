@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import datetime as dt
 
+from pathlib import Path
+
 import altair as alt
-import folium
 import pandas as pd
 import streamlit as st
-from streamlit_folium import st_folium
+import streamlit.components.v1 as components
 
+from app_map import gridmap_url
+from bess_arbitrage.activation import activation_margin, fetch_afrr_mol_de
 from bess_arbitrage.atlas import ZONES, run_atlas
 from bess_arbitrage.balancing import fetch_products_de
 from bess_arbitrage.bench import run_sequential
@@ -226,8 +229,8 @@ def replay_views(ds: dict) -> None:
     st.altair_chart(soc_ch, use_container_width=True)
 
 
-tab_today, tab_replay, tab_map, tab_trends = st.tabs(
-    ["Today", "Day replay", "Europe map", "Trends"])
+tab_today, tab_replay, tab_map, tab_trends, tab_report = st.tabs(
+    ["Today", "Day replay", "Europe map", "Trends", "Report"])
 
 # ---------------------------------------------------------------------------
 # TAB 1 — Today: live answers, zero input
@@ -297,6 +300,28 @@ with tab_today:
                    "costs a few percent, a naive price forecast ~15%, and bidding reserve "
                    "capacity pay-as-bid with yesterday's information leaves ~30% of the "
                    "stacked ceiling on the table.")
+        with st.expander("+ aFRR activation band on the operated stack (30 days)"):
+            @st.cache_data(show_spinner="Merit orders for 30 days (first run only)…")
+            def ladder_band(end_iso: str, p_: float, dur: float, r_: float,
+                            cx: float, cyc: float) -> dict:
+                from bess_arbitrage.activation import sequential_activation_band
+                start = (dt.date.fromisoformat(end_iso) - dt.timedelta(days=29)).isoformat()
+                s = run_sequential(start, end_iso,
+                                   Battery(p_, dur, r_, cx, cyc or None))
+                return {"band": sequential_activation_band(s["awards"], s["px"],
+                                                           pause_s=0.3),
+                        "seq_eur": s["seq_eur"]}
+            if st.session_state.get("band_go") or st.button(
+                    "Compute (downloads ~30 merit orders on first run)"):
+                st.session_state["band_go"] = True
+                b = ladder_band(YESTERDAY.isoformat(), power, duration, rte, capex, cycles)
+                cols = st.columns(3)
+                for col, (depth, m) in zip(cols, b["band"].items()):
+                    col.metric(f"depth {depth:.0%}", f"{m['uplift_eur']:+,.0f} €",
+                               f"{m['uplift_eur'] / b['seq_eur']:+.1%} vs operated stack")
+                st.caption("The operated stack above earns capacity only; activation adds "
+                           "this band depending on how deep the TSO calls the merit order. "
+                           "Scenario, not data — see the monthly report for the method.")
     except Exception as e:
         st.markdown(panel(f"Information ladder unavailable: {e}", C["red"]),
                     unsafe_allow_html=True)
@@ -318,7 +343,35 @@ with tab_replay:
             replay_views(ds)
             st.caption("Co-optimized with hindsight: the ceiling view of this day. FCR at the "
                        "German clearing price; aFRR at the mean accepted bid (pay-as-bid), "
-                       "capacity only — activation energy not modeled.")
+                       "capacity revenue in the split — activation margin below.")
+
+            disp = ds["dispatch"]
+            aw_pos = [float(disp["afrr_pos"].iloc[b * 4]) if "afrr_pos" in disp else 0.0
+                      for b in range(6)]
+            aw_neg = [float(disp["afrr_neg"].iloc[b * 4]) if "afrr_neg" in disp else 0.0
+                      for b in range(6)]
+            if any(aw_pos) or any(aw_neg):
+                with st.expander("aFRR activation margin — v1 scenario band", expanded=False):
+                    @st.cache_data(show_spinner="Merit order for this day…")
+                    def load_mol(day_iso: str) -> pd.DataFrame:
+                        return fetch_afrr_mol_de(dt.date.fromisoformat(day_iso))
+                    try:
+                        mol = load_mol(rday.isoformat())
+                        cols = st.columns(3)
+                        for col, depth in zip(cols, (0.05, 0.15, 0.30)):
+                            m = activation_margin(mol, px_day, aw_pos, aw_neg,
+                                                  depth_frac=depth)
+                            tot = m["pos_eur"] + m["neg_eur"]
+                            col.metric(f"depth {depth:.0%}", f"{tot:+,.0f} €",
+                                       f"+{m['throughput_mwh']:.1f} MWh cycled")
+                        st.caption("Depth = activated share of the merit order (duty) and "
+                                   "settlement depth, coupled; bid at 5% of the MOL, SoC "
+                                   "restored at DA. Scenario, not data.")
+                    except Exception as e:
+                        st.markdown(panel(f"Merit order unavailable: {e}", C["red"]),
+                                    unsafe_allow_html=True)
+            else:
+                st.caption("No aFRR capacity committed this day — no activation margin.")
     except Exception as e:
         st.markdown(panel(f"No data for {rday}: {e}", C["red"]), unsafe_allow_html=True)
 
@@ -364,62 +417,31 @@ if not dfm.empty:
     dfm["norm"] = (dfm["rev"] - lo) / (hi - lo + 1e-9)
     best = dfm.loc[dfm["rev"].idxmax()]
 
-    st.subheader("Click the map to place a battery — see how much it would earn there")
-    st.caption("Deep amber = more profitable arbitrage · radius ∝ revenue. "
-               "The click is assigned to the nearest bidding zone.")
+    st.subheader("The grid under the numbers — real transmission lines, amber = value")
+    st.caption("Choropleth: perfect-foresight ceiling per zone. Cyan lines: 300 kV+ "
+               "transmission (OpenInfraMap); zoom in for the lower grid and substations.")
+
+    vals = {z.zone: {"rev": z.rev, "payback": z.payback,
+                     "capture": (f"{z.capture_rolling:.0%} / {z.capture_persistence:.0%}"
+                                 if cap_on else None)}
+            for z in dfm.itertuples()}
+    components.iframe(gridmap_url(vals, height=560), height=568)
 
     ss = st.session_state
     ss.setdefault("placements", [])
-    ss.setdefault("done_clicks", set())
-
-    def zone_color(norm: float) -> str:
-        # mono-amber scale: dim amber -> full amber (same hue, only intensity changes)
-        lo, hi = (0x5E, 0x45, 0x1C), (0xF2, 0xA9, 0x3B)
-        return "#" + "".join(f"{int(a + (b - a) * norm):02x}" for a, b in zip(lo, hi))
-
-    fmap = folium.Map(location=[49.5, 8.0], zoom_start=4, tiles="CartoDB dark_matter")
-    # the page CSS doesn't reach the iframe: popup/tooltip theme injected into the map
-    fmap.get_root().header.add_child(folium.Element(f"""<style>
-      @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap');
-      .leaflet-tooltip, .leaflet-popup-content-wrapper, .leaflet-popup-tip {{
-        background: {C['surface']}; color: {C['text']};
-        font-family: 'IBM Plex Mono', monospace; border: 1px solid {C['border']};
-      }}
-      .leaflet-tooltip {{ box-shadow: none; }}
-      .leaflet-popup-close-button {{ color: {C['muted']}; }}
-    </style>"""))
-    for z in dfm.itertuples():
-        tip = f"{z.zone}: {z.rev:,.0f} €/MW/year · payback {z.payback:.1f}y"
-        if cap_on:
-            tip += f" · capture {z.capture_rolling:.0%} / {z.capture_persistence:.0%}"
-        folium.CircleMarker(
-            [z.lat, z.lon], radius=8 + z.norm * 16, color="#D8DEE9", weight=1,
-            fill=True, fill_color=zone_color(z.norm), fill_opacity=0.9,
-            tooltip=tip,
-        ).add_to(fmap)
-    for p in ss.placements:
-        folium.Marker(
-            [p["lat"], p["lon"]], icon=folium.Icon(color="orange", icon="bolt", prefix="fa"),
-            popup=f"{power:g} MW / {duration:g}h → {p['zone']}<br>"
-                  f"<b>{p['rev']:,.0f} €/MW/year</b> · payback {p['payback']:.1f}y",
-        ).add_to(fmap)
-
-    out = st_folium(fmap, height=520, use_container_width=True, key="mappa_eu")
-
-    click = out.get("last_clicked")
-    if click:
-        key = (round(click["lat"], 5), round(click["lng"], 5))
-        if key not in ss.done_clicks:
-            ss.done_clicks.add(key)
-            # ponytail: zone = nearest centroid, no polygons; add zone geojson if border precision is ever needed
-            zrow = dfm.loc[((dfm.lat - key[0]) ** 2 + (dfm.lon - key[1]) ** 2).idxmin()]
-            ss.placements.append({"lat": key[0], "lon": key[1], "zone": zrow.zone,
-                                  "rev": zrow.rev, "payback": zrow.payback})
-            st.rerun()
+    pc = st.columns([2, 1, 1])
+    pick = pc[0].selectbox("Place a battery in…", dfm.sort_values("rev", ascending=False).zone)
+    if pc[1].button("Add to portfolio"):
+        zrow = dfm.loc[dfm.zone == pick].iloc[0]
+        ss.placements.append({"zone": zrow.zone, "rev": zrow.rev, "payback": zrow.payback})
+        st.rerun()
+    if ss.placements and pc[2].button("Clear portfolio"):
+        ss.placements = []
+        st.rerun()
 
     if ss.placements:
         last = ss.placements[-1]
-        tot = sum(p["rev"] for p in ss.placements) * power
+        tot = sum(pl["rev"] for pl in ss.placements) * power
         c = st.columns(3)
         c[0].metric(f"Last: {last['zone']} — €/MW/year", f"{last['rev']:,.0f}",
                     f"{(last['rev'] / best.rev - 1) * 100:+.0f}% vs best ({best.zone})")
@@ -431,9 +453,6 @@ if not dfm.empty:
             c[2].markdown(panel(f"The best zone is <b>{best.zone}</b> — worth "
                                 f"<span class='mono'>{best.rev - last['rev']:,.0f}</span> €/MW/year more.",
                                 C["amber"]), unsafe_allow_html=True)
-        if st.button("Clear portfolio"):
-            ss.placements, ss.done_clicks = [], set()
-            st.rerun()
 
     tbl_cols = ["zone", "rev", "payback"] + (
         ["capture_rolling", "capture_persistence"] if cap_on else [])
@@ -481,3 +500,18 @@ with tab_trends:
                    "fewer than 15 complete days are hidden.")
     except Exception as e:
         st.markdown(panel(f"No trend data for {tz}: {e}", C["red"]), unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
+# TAB 5 — Report: the auto-published monthly numbers, readable in-app
+# ---------------------------------------------------------------------------
+with tab_report:
+    reps = sorted(Path("reports").glob("*.md"), reverse=True)
+    if not reps:
+        st.markdown(panel("No report yet — the GitHub Action publishes one on the 2nd "
+                          "of each month, or run: uv run python -m bess_arbitrage.report",
+                          C["amber"]), unsafe_allow_html=True)
+    else:
+        which = st.selectbox("Month", [r.stem for r in reps])
+        st.markdown((Path("reports") / f"{which}.md").read_text())
+        st.caption("Generated by bess_arbitrage.report — also on GitHub under reports/.")
