@@ -8,7 +8,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bess_arbitrage.capture import persistence_forecast, rolling_day_ahead
+from bess_arbitrage.capture import (fit_supply_curve, isotonic_forecast,
+                                    persistence_forecast, rolling_day_ahead)
 from bess_arbitrage.model import Battery, optimize
 
 
@@ -62,6 +63,21 @@ def test_more_cycles_never_earn_less(prices):
     tight = optimize(prices, Battery(max_cycles_per_day=1.0)).revenue_eur
     loose = optimize(prices, Battery(max_cycles_per_day=2.0)).revenue_eur
     assert loose >= tight - 1e-6
+
+
+def test_isotonic_curve_and_capture(prices, bat):
+    rng = np.random.default_rng(0)
+    stress = pd.Series(rng.normal(50, 20, len(prices)), index=prices.index)
+    xs, fit = fit_supply_curve(stress, prices)
+    # the fit is a non-decreasing step function bounded by the observed prices
+    assert (np.diff(fit) >= -1e-9).all()
+    assert prices.min() - 1e-9 <= fit.min() and fit.max() <= prices.max() + 1e-9
+    # noisy signal: still feasible for the full LP => ceiling dominates
+    c = isotonic_forecast(prices, stress, bat, train_prices=prices, train_stress=stress)
+    assert c.ratio <= 1 + 1e-9
+    # perfectly informative signal (stress == price): matches rolling day-ahead
+    perfect = isotonic_forecast(prices, prices, bat, train_prices=prices, train_stress=prices)
+    assert abs(perfect.revenue_eur - rolling_day_ahead(prices, bat).revenue_eur) < 1e-6
 
 
 def test_degradation_reduces_net_and_throughput(prices, bat):

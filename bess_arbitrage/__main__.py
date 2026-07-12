@@ -52,13 +52,21 @@ def main() -> None:
     print("  note: perfect-foresight = upper bound; real dispatch with forecasts earns less.")
 
     if a.capture:
-        from .capture import persistence_forecast, rolling_day_ahead
+        from .capture import isotonic_forecast, persistence_forecast, rolling_day_ahead
+        from .prices import fetch_residual_load
         roll = rolling_day_ahead(px, bat)
         pers = persistence_forecast(px, bat)
         print("  capture vs ceiling:")
         print(f"    rolling day-ahead   : {roll.revenue_eur:,.0f} EUR -> {roll.ratio:.1%}")
         print(f"    persistence forecast: {pers.revenue_eur:,.0f} EUR -> {pers.ratio:.1%}"
               f"  (ceiling {pers.ceiling_eur:,.0f} EUR on same {pers.hours} h, day 1 skipped)")
+        # supply curve trained on the year before the window, evaluated in it
+        t0, t1 = f"{int(a.start[:4]) - 1}{a.start[4:]}", f"{int(a.end[:4]) - 1}{a.end[4:]}"
+        iso = isotonic_forecast(px, fetch_residual_load(a.bzn, a.start, a.end), bat,
+                                train_prices=fetch_day_ahead(a.bzn, t0, t1),
+                                train_stress=fetch_residual_load(a.bzn, t0, t1))
+        print(f"    isotonic supply crv : {iso.revenue_eur:,.0f} EUR -> {iso.ratio:.1%}"
+              f"  (residual-load curve fit on {t0[:4]}, realized residual load)")
     print()
 
     if a.plot:
