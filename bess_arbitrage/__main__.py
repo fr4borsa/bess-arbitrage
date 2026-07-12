@@ -5,8 +5,9 @@
 from __future__ import annotations
 
 import argparse
+import math
 
-from .model import Battery, optimize
+from .model import Battery, CAPEX_TURNKEY_EUR_KWH, optimize
 from .prices import fetch_day_ahead
 
 
@@ -20,22 +21,34 @@ def main() -> None:
     ap.add_argument("--rte", type=float, default=0.85)
     ap.add_argument("--capex", type=float, default=125.0, help="EUR/kWh")
     ap.add_argument("--cycles", type=float, default=1.5, help="max cycles/day (0 = unlimited)")
+    ap.add_argument("--cycle-cost", type=float, default=0.0,
+                    help="EUR/MWh discharged degradation cost (0 = off; ~8 for merchant LFP)")
     ap.add_argument("--capture", action="store_true",
                     help="score rolling day-ahead and persistence-forecast dispatch vs the ceiling")
     ap.add_argument("--plot", action="store_true")
     a = ap.parse_args()
 
     px = fetch_day_ahead(a.bzn, a.start, a.end)
-    bat = Battery(a.power, a.duration, a.rte, a.capex, a.cycles or None)
+    bat = Battery(a.power, a.duration, a.rte, a.capex, a.cycles or None,
+                  cycle_cost_eur_per_mwh=a.cycle_cost or None)
     res = optimize(px, bat)
 
     print(f"\n{a.bzn}  {a.start}..{a.end}   ({res.hours} h)")
     print(f"  price: mean {px.mean():.1f}  p5 {px.quantile(.05):.1f}  p95 {px.quantile(.95):.1f} EUR/MWh")
     print(f"  battery: {bat.power_mw} MW / {bat.duration_h} h ({bat.capacity_mwh} MWh), "
           f"RTE {bat.rte:.0%}, cap {a.cycles or 'inf'} cyc/d")
-    print(f"  CEILING revenue: {res.revenue_per_mw_year:,.0f} EUR/MW/year  "
+    tag = "NET (post-wear)" if bat.cycle_cost_eur_per_mwh else "CEILING"
+    print(f"  {tag} revenue: {res.revenue_per_mw_year:,.0f} EUR/MW/year  "
           f"(total {res.revenue_eur:,.0f} EUR)")
-    print(f"  capex {bat.capex_eur:,.0f} EUR -> simple payback {res.simple_payback_years:.1f} y")
+    if bat.cycle_cost_eur_per_mwh:
+        print(f"    gross {res.gross_revenue_eur:,.0f} - wear {res.degradation_eur:,.0f} "
+              f"@ {bat.cycle_cost_eur_per_mwh:g}/MWh = net {res.revenue_eur:,.0f} EUR")
+    print(f"  payback band: {res.payback_years(a.capex):.1f} y (equipment {a.capex:g}/kWh) .. "
+          f"{res.payback_years(CAPEX_TURNKEY_EUR_KWH):.1f} y (turnkey {CAPEX_TURNKEY_EUR_KWH:g}/kWh)")
+    irr = res.irr()
+    irr_s = f"{irr:.0%}" if not math.isnan(irr) else "n/a (never breaks even)"
+    print(f"  investment (turnkey, 15y, 7% WACC, 2% opex, 1.5%/y fade): "
+          f"NPV {res.npv():,.0f} EUR, IRR {irr_s} (merchant hurdle ~10%)")
     print("  note: perfect-foresight = upper bound; real dispatch with forecasts earns less.")
 
     if a.capture:

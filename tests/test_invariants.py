@@ -2,6 +2,8 @@
 that must hold no matter what the prices look like; if one breaks, the engine
 is wrong, not the market.
 """
+from dataclasses import replace
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -60,3 +62,15 @@ def test_more_cycles_never_earn_less(prices):
     tight = optimize(prices, Battery(max_cycles_per_day=1.0)).revenue_eur
     loose = optimize(prices, Battery(max_cycles_per_day=2.0)).revenue_eur
     assert loose >= tight - 1e-6
+
+
+def test_degradation_reduces_net_and_throughput(prices, bat):
+    base = optimize(prices, bat)
+    deg = optimize(prices, replace(bat, cycle_cost_eur_per_mwh=8.0))
+    # pricing wear can only lower net revenue and throughput, never raise them
+    assert deg.revenue_eur <= base.revenue_eur + 1e-6
+    assert deg.dispatch["discharge"].sum() <= base.dispatch["discharge"].sum() + 1e-6
+    # book-keeping: net = gross - wear, wear >= 0, and it's genuinely off by default
+    assert deg.degradation_eur >= 0
+    assert abs(deg.revenue_eur + deg.degradation_eur - deg.gross_revenue_eur) < 1e-6
+    assert base.degradation_eur == 0.0
