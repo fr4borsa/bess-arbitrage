@@ -106,10 +106,11 @@ def isotonic_forecast(prices: pd.Series, stress: pd.Series, bat: Battery,
     """Optimize on prices predicted from residual load via the supply curve
     fit on the training window, settle at real prices. SOC chained across days.
 
-    ponytail: v1 uses the REALIZED residual load of the day (not a forecast),
-    so it isolates the price-model error; swap in TSO day-ahead load/RES
-    forecasts for a true ex-ante number. Single curve for the whole window:
-    condition by gas-price regime / season when it plateaus.
+    stress decides what the number means: pass the REALIZED residual load to
+    isolate the price-model error, or prices.fetch_residual_load_forecast
+    (TSO day-ahead load/RES forecasts, published before the auction) for a
+    true ex-ante number — the CLI prints both. Single curve for the whole
+    window: condition by gas-price regime / season when it plateaus.
     """
     curve = fit_supply_curve(train_stress, train_prices)
     aligned = pd.concat([prices, stress], axis=1, join="inner").dropna()

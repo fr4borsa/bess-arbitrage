@@ -33,9 +33,10 @@ tomorrow (`--capture`):
 | variant | knows | DE-LU H1 2026 | FR H1 2026 |
 |---|---|---|---|
 | rolling day-ahead | today's real prices (auction view) | **96.8%** | **94.9%** |
+| isotonic **ex-ante** | TSO day-ahead load/RES *forecasts* through the curve | **91.7%** | **72.0%** |
+| isotonic (realized) | realized residual load through a 2025-fitted merit order | **90.5%** | **73.8%** |
 | learned linear | per-hour lag-1/lag-7 regression, 28d window | **86.2%** | **79.3%** |
 | persistence | yesterday's prices | **84.2%** | **78.8%** |
-| isotonic supply curve | residual load through a 2025-fitted merit order | **90.5%** | **73.8%** |
 
 Reproduce: `uv run python -m bess_arbitrage --bzn DE-LU --start 2026-01-01
 --end 2026-06-30 --capture` (and `--bzn FR`). Capture = revenue / same-hours
@@ -55,21 +56,28 @@ What these numbers actually say:
   and yesterday already encodes most of it.
 - **Features beat model class — when the regime matches.** The isotonic
   supply-curve model (fundamentals: residual load through an empirical merit
-  order) gains +6.3 pp over persistence in solar-driven DE-LU… and *loses*
-  5.0 pp in nuclear-dominated FR, where a curve fitted on 2025 doesn't
+  order) gains +6–7 pp over persistence in solar-driven DE-LU… and *loses*
+  5–7 pp in nuclear-dominated FR, where a curve fitted on 2025 doesn't
   transfer. The lesson is not "fundamentals are good": it's that **input
   features and regime-awareness dominate model sophistication**, and a wrong
   fundamental model underperforms knowing nothing.
+- **The ex-ante version is not a discount — in DE it's an upgrade.** Feeding
+  the curve TSO *day-ahead forecasts* of load/solar/wind (published before
+  the auction, so a genuinely operable strategy) scores 91.7% in DE-LU —
+  *above* the 90.5% obtained with the realized residual load. That is not a
+  fluke; it's market microstructure: **the auction itself clears on forecast
+  fundamentals**, so the TSO forecast is the more coherent predictor of the
+  day-ahead price than what the fundamentals later turned out to be. In FR
+  the ex-ante variant scores 72.0% — the regime problem, not the forecast,
+  is the binding constraint there.
 
 So a *real* AI layer for this repo is not a bigger network — it is better
-inputs: TSO day-ahead load/wind/solar forecasts (published before the
-auction, so legitimately ex-ante), fuel and CO₂ prices to condition the
-supply curve by regime, and only then a gradient-boosted or similar model on
-top. Probabilistic output (quantiles instead of a point forecast) would also
-let the bidder trade expected revenue against risk — something no point
-forecast can express. That is the roadmap direction the capture table
-justifies; anything fancier has to first beat `learned linear` on these same
-two zones, out of sample.
+inputs, and the ex-ante result shows the pipeline for them now exists
+end-to-end. What's left on top: fuel and CO₂ prices to condition the supply
+curve by regime (the FR fix), and probabilistic output (quantiles instead of
+a point forecast) so the bidder can trade expected revenue against risk —
+something no point forecast can express. Anything fancier has to first beat
+these baselines on the same two zones, out of sample.
 
 ## Slot 3: narration — optional, low stakes
 

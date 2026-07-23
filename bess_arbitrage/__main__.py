@@ -60,7 +60,7 @@ def main() -> None:
             persistence_forecast,
             rolling_day_ahead,
         )
-        from .prices import fetch_residual_load
+        from .prices import fetch_residual_load, fetch_residual_load_forecast
         roll = rolling_day_ahead(px, bat)
         pers = persistence_forecast(px, bat)
         print("  capture vs ceiling:")
@@ -72,11 +72,16 @@ def main() -> None:
               f"  (per-hour lag-1/lag-7 lstsq, 28d window, {lrn.hours} h settled)")
         # supply curve trained on the year before the window, evaluated in it
         t0, t1 = f"{int(a.start[:4]) - 1}{a.start[4:]}", f"{int(a.end[:4]) - 1}{a.end[4:]}"
+        train_px = fetch_day_ahead(a.bzn, t0, t1)
+        train_rl = fetch_residual_load(a.bzn, t0, t1)
         iso = isotonic_forecast(px, fetch_residual_load(a.bzn, a.start, a.end), bat,
-                                train_prices=fetch_day_ahead(a.bzn, t0, t1),
-                                train_stress=fetch_residual_load(a.bzn, t0, t1))
+                                train_prices=train_px, train_stress=train_rl)
         print(f"    isotonic supply crv : {iso.revenue_eur:,.0f} EUR -> {iso.ratio:.1%}"
               f"  (residual-load curve fit on {t0[:4]}, realized residual load)")
+        iso_x = isotonic_forecast(px, fetch_residual_load_forecast(a.bzn, a.start, a.end), bat,
+                                  train_prices=train_px, train_stress=train_rl)
+        print(f"    isotonic EX-ANTE    : {iso_x.revenue_eur:,.0f} EUR -> {iso_x.ratio:.1%}"
+              f"  (same curve, TSO day-ahead load/RES forecasts — a real strategy)")
     print()
 
     if a.plot:

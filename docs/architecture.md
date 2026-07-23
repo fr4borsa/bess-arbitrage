@@ -14,7 +14,8 @@ way of framing or re-running that same LP. One engine, many views.
 
 ```
 energy-charts.info ──┐                        ┌─> __main__.py   CLI (one zone)
-(spot, residual load)│   .cache/ (raw JSON)   ├─> atlas.py      ~35 zones ranked
+(spot, residual load,│   .cache/ (raw JSON)   ├─> atlas.py      ~35 zones ranked
+ day-ahead forecasts)│                        │
                      ├─> prices.py ──┐        ├─> bench.py      DA + FCR/aFRR stack
 regelleistung.net ───┘               ├─> model.py (LP, HiGHS)   ├─> app.py  Streamlit UI
 (FCR/aFRR auctions) ──> balancing.py ┘        │                 └─> report.py monthly md

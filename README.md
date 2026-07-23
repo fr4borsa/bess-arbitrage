@@ -62,7 +62,9 @@ differing **only in what they know about tomorrow**:
   forecaster that could beat persistence — it measures what *learning* adds.
 - **isotonic supply curve** — residual load pushed through an empirical merit-order
   curve (isotonic regression fit on the previous year, Sunairio-style). The
-  fundamentals baseline — it measures what *features* add.
+  fundamentals baseline — it measures what *features* add. Printed twice: with the
+  *realized* residual load (price-model error only) and **ex-ante**, with the TSO
+  day-ahead load/RES forecasts published before the auction — a real, operable strategy.
 
 All dispatches are feasible for the full-period LP, so revenue ≤ ceiling by
 construction. Real example (DE-LU, H1 2026, default 1 MW / 2 h battery):
@@ -75,12 +77,15 @@ DE-LU  2026-01-01..2026-06-30   (4343 h)
     persistence forecast: 40,268 EUR -> 84.2%  (ceiling 47,832 EUR on same 4319 h, day 1 skipped)
     learned linear      : 40,707 EUR -> 86.2%  (per-hour lag-1/lag-7 lstsq, 28d window, 4174 h settled)
     isotonic supply crv : 43,325 EUR -> 90.5%  (residual-load curve fit on 2025, realized residual load)
+    isotonic EX-ANTE    : 43,915 EUR -> 91.7%  (same curve, TSO day-ahead load/RES forecasts — a real strategy)
 ```
 
 Reading: the daily horizon alone costs ~3%; naive persistence keeps ~84%; cheap
-learning on price history buys only +2 pp; fundamentals buy +6 pp in solar-driven
-DE — and *lose* 5 pp in nuclear-dominated FR, where the curve doesn't transfer.
-The full argument (and why dispatch itself needs no ML): [docs/ai-layer.md](docs/ai-layer.md).
+learning on price history buys only +2 pp; fundamentals buy +6–7 pp in solar-driven
+DE — and *lose* 5–7 pp in nuclear-dominated FR, where the curve doesn't transfer.
+The ex-ante variant (TSO forecasts) even *beats* the realized-fundamentals one in DE:
+the auction clears on forecasts, so forecasts predict it better. The full argument
+(and why dispatch itself needs no ML): [docs/ai-layer.md](docs/ai-layer.md).
 
 ## UI (Streamlit)
 
@@ -195,8 +200,11 @@ CI runs the offline checks and the invariant tests on every push.
    grid-fee and connection-constraint impacts on the business case.
 4. **Forecast layer** — ~~learned-linear + isotonic capture baselines~~
    shipped 2026-07, with the measured verdict in
-   [docs/ai-layer.md](docs/ai-layer.md). Still open: ex-ante features (TSO
-   day-ahead load/RES forecasts), regime-conditioned supply curves,
-   probabilistic forecasts for risk-aware bidding.
+   [docs/ai-layer.md](docs/ai-layer.md). ~~Ex-ante features~~ shipped
+   2026-07: TSO day-ahead load/RES forecasts drive the isotonic variant —
+   in DE-LU it beats even the realized-fundamentals version (91.7% vs
+   90.5%), because the auction itself clears on forecasts. Still open:
+   regime-conditioned supply curves (the FR fix), probabilistic forecasts
+   for risk-aware bidding.
 
 Work in progress — numbers and interfaces evolve. Issues and feedback welcome.

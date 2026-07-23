@@ -11,6 +11,7 @@ import requests
 
 API = "https://api.energy-charts.info/price"
 PUBLIC_POWER_API = "https://api.energy-charts.info/public_power"
+FORECAST_API = "https://api.energy-charts.info/public_power_forecast"
 CACHE_DIR = Path(__file__).resolve().parent.parent / ".cache" / "energy-charts"
 
 
@@ -73,6 +74,36 @@ def fetch_residual_load(bzn: str = "DE-LU", start: str = "2025-01-01",
     return s.resample("1h").mean().dropna()
 
 
+def fetch_residual_load_forecast(bzn: str = "DE-LU", start: str = "2025-01-01",
+                                 end: str = "2025-12-31") -> pd.Series:
+    """Hourly EX-ANTE residual load [MW]: TSO day-ahead load forecast minus
+    day-ahead solar and wind forecasts. All series are published before the
+    day-ahead auction closes, so a dispatch driven by this is a true ex-ante
+    strategy — unlike fetch_residual_load, which is the realized outcome.
+
+    Offshore wind is optional (some countries have none); the other three
+    series are required. Per country, like public_power: DE-LU -> "de".
+    """
+    country = bzn.split("-")[0].lower()
+    parts: dict[str, pd.Series] = {}
+    for pt in ("load", "solar", "wind_onshore", "wind_offshore"):
+        j = _get_json(FORECAST_API,
+                      {"country": country, "production_type": pt,
+                       "forecast_type": "day-ahead", "start": start, "end": end},
+                      CACHE_DIR / country / f"fc_{pt}_{start}_{end}.json", end)
+        vals = j.get("forecast_values") or []
+        if not vals:
+            if pt == "wind_offshore":
+                continue  # no offshore fleet is normal; missing load/solar/wind is not
+            raise RuntimeError(f"no day-ahead {pt} forecast for {country} {start}..{end}")
+        idx = pd.to_datetime(j["unix_seconds"], unit="s", utc=True)
+        parts[pt] = pd.Series(vals, index=idx, dtype=float).resample("1h").mean()
+    s = parts["load"] - parts["solar"] - parts["wind_onshore"]
+    if "wind_offshore" in parts:
+        s = s - parts["wind_offshore"]
+    return s.dropna().rename(f"{country}_residual_load_forecast_mw")
+
+
 if __name__ == "__main__":
     # ponytail: smoke check against live API — last 7 days of DE-LU
     end = dt.date.today()
@@ -82,3 +113,11 @@ if __name__ == "__main__":
     assert px.min() > -500 and px.max() < 5000, f"prices out of sane range: {px.min()}..{px.max()}"
     print(f"DE-LU {start}..{end}: {len(px)} h, mean {px.mean():.1f} EUR/MWh, "
           f"min {px.min():.1f}, max {px.max():.1f}")
+    fc = fetch_residual_load_forecast("DE-LU", start.isoformat(), end.isoformat())
+    rl = fetch_residual_load("DE-LU", start.isoformat(), end.isoformat())
+    both = pd.concat([fc, rl], axis=1, join="inner").dropna()
+    mape = (both.iloc[:, 0] - both.iloc[:, 1]).abs().mean() / both.iloc[:, 1].abs().mean()
+    assert len(both) > 100, f"expected >100 overlapping hours, got {len(both)}"
+    assert mape < 0.25, f"forecast vs realized residual load off by {mape:.0%}"
+    print(f"residual-load day-ahead forecast: {len(fc)} h, "
+          f"vs realized MAPE-ish {mape:.1%} on {len(both)} overlapping h")
