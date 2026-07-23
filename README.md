@@ -10,6 +10,10 @@ strategy is measured against.
 Data: [energy-charts.info](https://energy-charts.info) (Fraunhofer ISE, no API key).
 Optimizer: linear program solved with [HiGHS](https://highs.dev).
 
+Docs: [architecture & stack](docs/architecture.md) ·
+[does this need an AI layer?](docs/ai-layer.md) (measured answer) ·
+[how it works, for finance people](docs/how-it-works.md)
+
 ## Quick start
 
 ```bash
@@ -40,19 +44,27 @@ real dispatch with day-ahead forecasts earns less. This is the right benchmark f
 is exactly what BESS revenue/optimisation analysis is about.
 
 Flags: `--power` (MW) `--duration` (h) `--rte` `--capex` (EUR/kWh) `--cycles` (/day,
-`0` = unlimited) `--capture` `--plot`. Capex defaults to the Ember $125/kWh all-in benchmark.
+`0` = unlimited) `--cycle-cost` (EUR/MWh discharged, degradation-aware dispatch)
+`--capture` `--plot`. Capex defaults to the Ember $125/kWh all-in benchmark.
 
 ## Capture ratio (`--capture`)
 
-How much of the ceiling a realistic dispatch keeps. Two variants, both reusing the
-same LP day by day (SOC carried across midnight, cycles cap pro-rata per day):
+How much of the ceiling a realistic dispatch keeps. Four variants, all reusing the
+same LP day by day (SOC carried across midnight, cycles cap pro-rata per day) and
+differing **only in what they know about tomorrow**:
 
 - **rolling day-ahead** — LP on each day's own (known) prices, the day-ahead auction
   view. Isolates the pure horizon effect: no cross-day positioning.
 - **persistence forecast** — LP on *yesterday's* prices used as today's forecast,
   schedule settled at today's *real* prices. Standard industry baseline.
+- **learned linear** — per-hour regression `price[d,h] ~ price[d-1,h] + price[d-7,h]`,
+  least-squares on a trailing 28-day window, refit daily. The smallest learned
+  forecaster that could beat persistence — it measures what *learning* adds.
+- **isotonic supply curve** — residual load pushed through an empirical merit-order
+  curve (isotonic regression fit on the previous year, Sunairio-style). The
+  fundamentals baseline — it measures what *features* add.
 
-Both dispatches are feasible for the full-period LP, so revenue ≤ ceiling by
+All dispatches are feasible for the full-period LP, so revenue ≤ ceiling by
 construction. Real example (DE-LU, H1 2026, default 1 MW / 2 h battery):
 
 ```
@@ -61,10 +73,14 @@ DE-LU  2026-01-01..2026-06-30   (4343 h)
   capture vs ceiling:
     rolling day-ahead   : 46,334 EUR -> 96.8%
     persistence forecast: 40,268 EUR -> 84.2%  (ceiling 47,832 EUR on same 4319 h, day 1 skipped)
+    learned linear      : 40,707 EUR -> 86.2%  (per-hour lag-1/lag-7 lstsq, 28d window, 4174 h settled)
+    isotonic supply crv : 43,325 EUR -> 90.5%  (residual-load curve fit on 2025, realized residual load)
 ```
 
-Reading: the daily horizon alone costs ~3%; a naive persistence forecast still
-captures ~84% of perfect foresight — the gap a real price forecast has to close.
+Reading: the daily horizon alone costs ~3%; naive persistence keeps ~84%; cheap
+learning on price history buys only +2 pp; fundamentals buy +6 pp in solar-driven
+DE — and *lose* 5 pp in nuclear-dominated FR, where the curve doesn't transfer.
+The full argument (and why dispatch itself needs no ML): [docs/ai-layer.md](docs/ai-layer.md).
 
 ## UI (Streamlit)
 
@@ -151,6 +167,7 @@ uv run python -m bess_arbitrage.atlas --demo  # offline atlas self-check (synthe
 uv run python -m bess_arbitrage.bench --demo  # offline stack-benchmark self-check
 uv run python -m bess_arbitrage.balancing     # live API smoke test (regelleistung.net, one day)
 uv run pytest -q                              # LP invariants on synthetic data (offline)
+uv run ruff check .                           # lint (same gate as CI)
 uv run python -m bess_arbitrage.report --month 2026-06  # regenerate a monthly report
 ```
 
@@ -172,7 +189,14 @@ CI runs the offline checks and the invariant tests on every push.
    settled at the marginal price at a parametric activation depth
    (5/15/30% scenarios — depth needs activated-volume data to become a fact).
    `bench --sequential --activation` and a report section carry the band.
-3. **Battery realism** — degradation-aware dispatch; grid-fee and
-   connection-constraint impacts on the business case.
+3. **Battery realism** — ~~degradation-aware dispatch~~ shipped 2026-07:
+   per-MWh cycle cost in the LP objective ("the battery that says no") plus an
+   investment view (payback band, NPV, IRR at turnkey capex). Still open:
+   grid-fee and connection-constraint impacts on the business case.
+4. **Forecast layer** — ~~learned-linear + isotonic capture baselines~~
+   shipped 2026-07, with the measured verdict in
+   [docs/ai-layer.md](docs/ai-layer.md). Still open: ex-ante features (TSO
+   day-ahead load/RES forecasts), regime-conditioned supply curves,
+   probabilistic forecasts for risk-aware bidding.
 
 Work in progress — numbers and interfaces evolve. Issues and feedback welcome.
