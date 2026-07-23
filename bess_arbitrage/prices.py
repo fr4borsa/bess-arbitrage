@@ -38,7 +38,8 @@ def _get_json(url: str, params: dict, cache_file: Path, end: str) -> dict:
     return j
 
 
-def fetch_day_ahead(bzn: str = "DE-LU", start: str = "2025-01-01", end: str = "2025-12-31") -> pd.Series:
+def fetch_day_ahead(bzn: str = "DE-LU", start: str = "2025-01-01",
+                    end: str = "2025-12-31") -> pd.Series:
     """Hourly day-ahead price [EUR/MWh] for a bidding zone, indexed by timestamp (UTC).
 
     bzn: bidding zone, e.g. DE-LU, BE, NL, FR. start/end: ISO dates inclusive.
@@ -54,7 +55,8 @@ def fetch_day_ahead(bzn: str = "DE-LU", start: str = "2025-01-01", end: str = "2
     return s.resample("1h").mean().dropna()
 
 
-def fetch_residual_load(bzn: str = "DE-LU", start: str = "2025-01-01", end: str = "2025-12-31") -> pd.Series:
+def fetch_residual_load(bzn: str = "DE-LU", start: str = "2025-01-01",
+                        end: str = "2025-12-31") -> pd.Series:
     """Hourly residual load [MW] (load - wind - solar) from public_power, UTC-indexed.
 
     The endpoint is per country, not per bidding zone: DE-LU -> "de".
@@ -77,6 +79,6 @@ if __name__ == "__main__":
     start = end - dt.timedelta(days=7)
     px = fetch_day_ahead("DE-LU", start.isoformat(), end.isoformat())
     assert len(px) > 100, f"expected >100 hourly points, got {len(px)}"
-    assert -500 < px.min() and px.max() < 5000, f"prices out of sane range: {px.min()}..{px.max()}"
+    assert px.min() > -500 and px.max() < 5000, f"prices out of sane range: {px.min()}..{px.max()}"
     print(f"DE-LU {start}..{end}: {len(px)} h, mean {px.mean():.1f} EUR/MWh, "
           f"min {px.min():.1f}, max {px.max():.1f}")

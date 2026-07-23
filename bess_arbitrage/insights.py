@@ -18,7 +18,8 @@ def day_stack(px_day: pd.Series, products_day: pd.DataFrame, bat: Battery) -> di
         "date": str(px_day.index[0].date()),
         "da_eur": da.revenue_eur,
         "stack_eur": st.revenue_eur,
-        "uplift_pct": (st.revenue_eur / da.revenue_eur - 1) * 100 if da.revenue_eur > 0 else float("nan"),
+        "uplift_pct": (st.revenue_eur / da.revenue_eur - 1) * 100
+        if da.revenue_eur > 0 else float("nan"),
         "split_eur": st.stack,
         "dispatch": st.dispatch,          # hourly, incl. fcr/afrr MW columns
         "dispatch_da": da.dispatch,

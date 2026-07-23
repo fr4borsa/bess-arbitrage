@@ -70,7 +70,8 @@ const ZONES = {json.dumps(gj)};
 const map = new maplibregl.Map({{
   container: "gridmap",
   center: [9.5, 51.0], zoom: 3.5, minZoom: 3, maxZoom: 12,
-  attributionControl: {{compact: true, customAttribution: "© OpenStreetMap contributors · OpenInfraMap"}},
+  attributionControl: {{compact: true,
+    customAttribution: "© OpenStreetMap contributors · OpenInfraMap"}},
   style: {{
     version: 8,
     sources: {{

@@ -7,7 +7,7 @@ from __future__ import annotations
 import argparse
 import math
 
-from .model import Battery, CAPEX_TURNKEY_EUR_KWH, optimize
+from .model import CAPEX_TURNKEY_EUR_KWH, Battery, optimize
 from .prices import fetch_day_ahead
 
 
@@ -34,7 +34,8 @@ def main() -> None:
     res = optimize(px, bat)
 
     print(f"\n{a.bzn}  {a.start}..{a.end}   ({res.hours} h)")
-    print(f"  price: mean {px.mean():.1f}  p5 {px.quantile(.05):.1f}  p95 {px.quantile(.95):.1f} EUR/MWh")
+    print(f"  price: mean {px.mean():.1f}  p5 {px.quantile(.05):.1f}"
+          f"  p95 {px.quantile(.95):.1f} EUR/MWh")
     print(f"  battery: {bat.power_mw} MW / {bat.duration_h} h ({bat.capacity_mwh} MWh), "
           f"RTE {bat.rte:.0%}, cap {a.cycles or 'inf'} cyc/d")
     tag = "NET (post-wear)" if bat.cycle_cost_eur_per_mwh else "CEILING"
@@ -43,8 +44,9 @@ def main() -> None:
     if bat.cycle_cost_eur_per_mwh:
         print(f"    gross {res.gross_revenue_eur:,.0f} - wear {res.degradation_eur:,.0f} "
               f"@ {bat.cycle_cost_eur_per_mwh:g}/MWh = net {res.revenue_eur:,.0f} EUR")
-    print(f"  payback band: {res.payback_years(a.capex):.1f} y (equipment {a.capex:g}/kWh) .. "
-          f"{res.payback_years(CAPEX_TURNKEY_EUR_KWH):.1f} y (turnkey {CAPEX_TURNKEY_EUR_KWH:g}/kWh)")
+    print(f"  payback band: {res.payback_years(a.capex):.1f} y (equipment {a.capex:g}/kWh) "
+          f".. {res.payback_years(CAPEX_TURNKEY_EUR_KWH):.1f} y "
+          f"(turnkey {CAPEX_TURNKEY_EUR_KWH:g}/kWh)")
     irr = res.irr()
     irr_s = f"{irr:.0%}" if not math.isnan(irr) else "n/a (never breaks even)"
     print(f"  investment (turnkey, 15y, 7% WACC, 2% opex, 1.5%/y fade): "

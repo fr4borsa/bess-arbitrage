@@ -8,7 +8,6 @@ Run:  uv run streamlit run app.py
 from __future__ import annotations
 
 import datetime as dt
-
 from pathlib import Path
 
 import altair as alt
@@ -89,11 +88,13 @@ def instrument(eyebrow: str, main: str, side: str, bar: list[tuple[str, float]],
 <div style="background:{C['surface']};border:1px solid {C['border']};border-radius:6px;
             padding:18px 22px;margin:6px 0 14px;">
   <div class="eyebrow">{eyebrow}</div>
-  <div class="mono" style="display:flex;align-items:baseline;gap:14px;margin-top:10px;flex-wrap:wrap;">
+  <div class="mono"
+       style="display:flex;align-items:baseline;gap:14px;margin-top:10px;flex-wrap:wrap;">
     <span style="color:{C['amber']};font-size:1.9rem;font-weight:600;">{main}</span>
     <span style="color:{C['muted']};font-size:1.0rem;margin-left:auto;">{side}</span>
   </div>
-  <div style="height:10px;background:{C['track']};border-radius:5px;margin-top:12px;overflow:hidden;">{segs}</div>
+  <div style="height:10px;background:{C['track']};border-radius:5px;
+              margin-top:12px;overflow:hidden;">{segs}</div>
   {leg}
 </div>"""
 
@@ -121,7 +122,7 @@ def headline_list(lines: list[str]) -> str:
     rows = "".join(
         f'<div style="display:flex;gap:12px;margin:9px 0;align-items:baseline;">'
         f'<span style="color:{C["amber"]};font-family:\'IBM Plex Mono\',monospace;">▸</span>'
-        f'<span style="color:{C["text"]};font-size:.95rem;">{l}</span></div>' for l in lines)
+        f'<span style="color:{C["text"]};font-size:.95rem;">{ln}</span></div>' for ln in lines)
     return (f'<div style="background:{C["surface"]};border:1px solid {C["border"]};'
             f'border-radius:6px;padding:12px 18px;">'
             f'<div class="eyebrow">what the atlas says — auto-generated from the ranking</div>'
@@ -185,12 +186,14 @@ def replay_views(ds: dict) -> None:
         y=alt.Y("price:Q", title="€/MWh"))
     buy = (base.transform_filter("datum.charge > 0.001")
            .mark_circle(color=C["green"], opacity=0.9)
-           .encode(y="price:Q", size=alt.Size("charge:Q", legend=None, scale=alt.Scale(range=[30, 300])),
+           .encode(y="price:Q",
+                   size=alt.Size("charge:Q", legend=None, scale=alt.Scale(range=[30, 300])),
                    tooltip=[alt.Tooltip("t:T", title="hour"), alt.Tooltip("price:Q", format=".0f"),
                             alt.Tooltip("charge:Q", title="charge MWh", format=".2f")]))
     sell = (base.transform_filter("datum.discharge > 0.001")
             .mark_circle(color=C["amber"], opacity=0.9)
-            .encode(y="price:Q", size=alt.Size("discharge:Q", legend=None, scale=alt.Scale(range=[30, 300])),
+            .encode(y="price:Q",
+                    size=alt.Size("discharge:Q", legend=None, scale=alt.Scale(range=[30, 300])),
                     tooltip=[alt.Tooltip("t:T", title="hour"), alt.Tooltip("price:Q", format=".0f"),
                              alt.Tooltip("discharge:Q", title="discharge MWh", format=".2f")]))
     st.subheader("Price and dispatch — green buys low · amber sells high")
@@ -246,7 +249,8 @@ with tab_today:
         bar = [(MKT[k], max(0.0, sp.get(f"{k}_eur", 0.0))) for k in MKT]
         legend = [(MKT_LABEL[k], MKT[k], f"{sp.get(f'{k}_eur', 0):,.0f} €") for k in MKT]
         st.markdown(instrument(
-            f"yesterday · {ds['date']} · germany (DE-LU) · {power:g} MW / {bat.capacity_mwh:g} MWh · real auction prices",
+            f"yesterday · {ds['date']} · germany (DE-LU) · {power:g} MW / "
+            f"{bat.capacity_mwh:g} MWh · real auction prices",
             f"{ds['stack_eur']:,.0f} €",
             f"arbitrage alone {ds['da_eur']:,.0f} € → stack {ds['uplift_pct']:+.0f}%",
             bar, legend), unsafe_allow_html=True)
@@ -316,7 +320,7 @@ with tab_today:
                 st.session_state["band_go"] = True
                 b = ladder_band(YESTERDAY.isoformat(), power, duration, rte, capex, cycles)
                 cols = st.columns(3)
-                for col, (depth, m) in zip(cols, b["band"].items()):
+                for col, (depth, m) in zip(cols, b["band"].items(), strict=True):
                     col.metric(f"depth {depth:.0%}", f"{m['uplift_eur']:+,.0f} €",
                                f"{m['uplift_eur'] / b['seq_eur']:+.1%} vs operated stack")
                 st.caption("The operated stack above earns capacity only; activation adds "
@@ -358,7 +362,7 @@ with tab_replay:
                     try:
                         mol = load_mol(rday.isoformat())
                         cols = st.columns(3)
-                        for col, depth in zip(cols, (0.05, 0.15, 0.30)):
+                        for col, depth in zip(cols, (0.05, 0.15, 0.30), strict=True):
                             m = activation_margin(mol, px_day, aw_pos, aw_neg,
                                                   depth_frac=depth)
                             tot = m["pos_eur"] + m["neg_eur"]
@@ -451,7 +455,8 @@ if not dfm.empty:
                                 C["green"]), unsafe_allow_html=True)
         else:
             c[2].markdown(panel(f"The best zone is <b>{best.zone}</b> — worth "
-                                f"<span class='mono'>{best.rev - last['rev']:,.0f}</span> €/MW/year more.",
+                                f"<span class='mono'>{best.rev - last['rev']:,.0f}</span> "
+                                f"€/MW/year more.",
                                 C["amber"]), unsafe_allow_html=True)
 
     tbl_cols = ["zone", "rev", "payback"] + (

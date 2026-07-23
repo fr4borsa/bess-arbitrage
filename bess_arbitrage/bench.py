@@ -46,7 +46,8 @@ def run_bench(start: str, end: str, bat: Battery,
     return {
         "da_only_eur_mw_y": da.revenue_eur * per_mw_y,
         "stack_eur_mw_y": st.revenue_eur * per_mw_y,
-        "uplift_pct": (st.revenue_eur / da.revenue_eur - 1) * 100 if da.revenue_eur else float("nan"),
+        "uplift_pct": (st.revenue_eur / da.revenue_eur - 1) * 100
+        if da.revenue_eur else float("nan"),
         "split_eur": st.stack,
         "hours": da.hours,
         "skipped_days": skipped,
@@ -135,12 +136,14 @@ def main() -> None:
         split = {k: round(v) for k, v in s["split_eur"].items()}
         print(f"sequential DE {a.start}..{a.end} — {s['hours']} h settled (day 1 skipped)")
         print(f"  stacked ceiling : {s['ceiling_eur']:>10,.0f} EUR")
-        print(f"  sequential ops  : {s['seq_eur']:>10,.0f} EUR  -> stack capture {s['capture']:.1%}")
+        print(f"  sequential ops  : {s['seq_eur']:>10,.0f} EUR"
+              f"  -> stack capture {s['capture']:.1%}")
         print(f"  split           : {split} EUR")
         if a.activation:
             from .activation import sequential_activation_band
             band = sequential_activation_band(s["awards"], s["px"])
-            print("  aFRR activation margin (v1: depth = duty AND settlement depth, bid at 5% of the MOL):")
+            print("  aFRR activation margin "
+                  "(v1: depth = duty AND settlement depth, bid at 5% of the MOL):")
             for depth, m in band.items():
                 cyc = m["throughput_mwh"] / bat.capacity_mwh
                 print(f"    depth {depth:.0%}: {m['uplift_eur']:>+9,.0f} EUR "

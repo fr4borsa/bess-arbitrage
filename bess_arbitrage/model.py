@@ -129,9 +129,9 @@ def optimize(prices: pd.Series, bat: Battery, soc0: float = 0.0,
     pmax = bat.power_mw  # 1h steps -> power [MW] == energy/step [MWh]
 
     m = pulp.LpProblem("arbitrage", pulp.LpMaximize)
-    chg = [pulp.LpVariable(f"c{t}", 0, pmax) for t in range(n)]   # grid -> battery [MWh]
-    dis = [pulp.LpVariable(f"d{t}", 0, pmax) for t in range(n)]   # battery -> grid [MWh]
-    soc = [pulp.LpVariable(f"s{t}", 0, cap) for t in range(n)]    # state of charge [MWh]
+    chg = [m.add_variable(f"c{t}", 0, pmax) for t in range(n)]   # grid -> battery [MWh]
+    dis = [m.add_variable(f"d{t}", 0, pmax) for t in range(n)]   # battery -> grid [MWh]
+    soc = [m.add_variable(f"s{t}", 0, cap) for t in range(n)]    # state of charge [MWh]
 
     # revenue = sell discharge, pay for charge, at the hourly price
     da_rev = pulp.lpSum(p[t] * (dis[t] - chg[t]) for t in range(n))
@@ -145,7 +145,7 @@ def optimize(prices: pd.Series, bat: Battery, soc0: float = 0.0,
                              f"(one per complete {BLOCK_H}h block of {n} hours)")
         for col in ("fcr", "afrr_pos", "afrr_neg"):
             if col in products and products[col].notna().all():
-                cvars[col] = [pulp.LpVariable(f"{col}{b}", 0, pmax) for b in range(nb)]
+                cvars[col] = [m.add_variable(f"{col}{b}", 0, pmax) for b in range(nb)]
         fcr = cvars.get("fcr")
         ap, an = cvars.get("afrr_pos"), cvars.get("afrr_neg")
         zero = pulp.LpAffineExpression()
@@ -317,7 +317,8 @@ def _demo_investment() -> None:
     assert npv_equip > npv_turnkey                                   # lower capex -> higher NPV
     assert r.npv(discount_rate=0.20) < r.npv(discount_rate=0.02)     # higher discount -> lower NPV
     irr = r.irr(capex_eur_per_kwh=CAPEX_EQUIPMENT_EUR_KWH)
-    assert abs(r.npv(capex_eur_per_kwh=CAPEX_EQUIPMENT_EUR_KWH, discount_rate=irr)) < 1.0  # NPV(IRR)~0
+    assert abs(r.npv(capex_eur_per_kwh=CAPEX_EQUIPMENT_EUR_KWH,
+                     discount_rate=irr)) < 1.0  # NPV(IRR)~0
     pe, pt = r.payback_years(CAPEX_EQUIPMENT_EUR_KWH), r.payback_years()
     assert pt > pe                                                   # turnkey pays back slower
     print(f"demo ok: payback {pe:.1f}y (equip) / {pt:.1f}y (turnkey), "

@@ -54,7 +54,7 @@ def persistence_forecast(prices: pd.Series, bat: Battery) -> Capture:
     Day 1 has no yesterday and is skipped — ceiling uses the same hours."""
     days = _days(prices)
     revenue, soc0, settled = 0.0, 0.0, []
-    for prev, today in zip(days, days[1:]):
+    for prev, today in zip(days, days[1:], strict=False):
         n = min(len(prev), len(today))  # partial edge days: align by position
         forecast = pd.Series(prev.to_numpy()[:n], index=today.index[:n])
         plan = optimize(forecast, bat, soc0=soc0).dispatch
@@ -82,11 +82,15 @@ def fit_supply_curve(stress: pd.Series, price: pd.Series) -> tuple[np.ndarray, n
     # PAVA: merge adjacent blocks while decreasing, block value = weighted mean
     val, w, cnt = [], [], []
     for y in ys:
-        val.append(float(y)); w.append(1.0); cnt.append(1)
+        val.append(float(y))
+        w.append(1.0)
+        cnt.append(1)
         while len(val) > 1 and val[-2] > val[-1]:
             y2, w2, c2 = val.pop(), w.pop(), cnt.pop()
             y1, w1, c1 = val.pop(), w.pop(), cnt.pop()
-            val.append((y1 * w1 + y2 * w2) / (w1 + w2)); w.append(w1 + w2); cnt.append(c1 + c2)
+            val.append((y1 * w1 + y2 * w2) / (w1 + w2))
+            w.append(w1 + w2)
+            cnt.append(c1 + c2)
     return xs, np.repeat(val, cnt)
 
 
@@ -129,7 +133,8 @@ def _demo() -> None:
         return list(np.roll([10] * 6 + [50] * 6 + [10] * 6 + [pk] * 6, shift))
 
     vals = np.concatenate([day(pk, sh) for pk, sh in
-                           zip([200, 160, 240, 120, 220, 180], [0, 1, -1, 1, 0, -1])]).astype(float)
+                           zip([200, 160, 240, 120, 220, 180], [0, 1, -1, 1, 0, -1],
+                               strict=True)]).astype(float)
     idx = pd.date_range("2025-01-01", periods=len(vals), freq="1h", tz="UTC")
     px = pd.Series(vals, index=idx)
     bat = Battery(power_mw=1, duration_h=2, rte=0.85, max_cycles_per_day=1.5)

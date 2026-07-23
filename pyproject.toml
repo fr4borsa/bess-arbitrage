@@ -21,10 +21,19 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "ruff>=0.8"]
 
 [project.urls]
 Repository = "https://github.com/fr4borsa/bess-arbitrage"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+filterwarnings = ["error"]  # a new deprecation is a failing test, not 7k ignored lines
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E731"]  # assigned lambdas are used deliberately (see model.irr)

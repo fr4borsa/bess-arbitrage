@@ -8,8 +8,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bess_arbitrage.capture import (fit_supply_curve, isotonic_forecast,
-                                    persistence_forecast, rolling_day_ahead)
+from bess_arbitrage.capture import (
+    fit_supply_curve,
+    isotonic_forecast,
+    persistence_forecast,
+    rolling_day_ahead,
+)
 from bess_arbitrage.model import Battery, optimize
 
 

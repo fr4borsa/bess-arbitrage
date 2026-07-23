@@ -43,7 +43,8 @@ def build_report(month: str, bat: Battery) -> str:
     band = sequential_activation_band(seq["awards"], seq["px"])
 
     # Spread trend: 6 months of context ending with the report month.
-    trend_start = f"{previous_month(date(int(month[:4]), int(month[5:7]), 1) - pd.Timedelta(days=150))}-01"
+    trend_month = previous_month(date(int(month[:4]), int(month[5:7]), 1) - pd.Timedelta(days=150))
+    trend_start = f"{trend_month}-01"
     spread = monthly_spread(fetch_day_ahead("DE-LU", trend_start, end))
 
     zones = {z: ZONES[z] for z in HEADLINE_ZONES}
