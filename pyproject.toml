@@ -9,7 +9,7 @@ requires-python = ">=3.12"
 dependencies = [
     "altair>=5.0",
     "folium>=0.20.0",
-    "highspy>=1.14.0",
+    "highspy>=1.15.1",
     "matplotlib>=3.11.0",
     "pandas>=3.0.3",
     "pulp>=3.3.2",
