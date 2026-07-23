@@ -124,6 +124,45 @@ def isotonic_forecast(prices: pd.Series, stress: pd.Series, bat: Battery,
     return Capture(optimize(real, bat).revenue_eur, revenue, len(real))
 
 
+def learned_forecast(prices: pd.Series, bat: Battery, train_days: int = 28) -> Capture:
+    """Optimize on prices from a per-hour linear model
+    price[d,h] = a_h*price[d-1,h] + b_h*price[d-7,h] + c_h — least-squares on a
+    trailing train_days window, refit every day — settled at real prices, SOC
+    chained. First 8 days are burn-in (lags + training rows) and are skipped;
+    the ceiling uses the same hours.
+
+    ponytail: the smallest learned forecaster that can beat persistence —
+    3 params/hour, numpy lstsq, no new dependency. What it closes vs
+    persistence is what LEARNING buys; the gap left vs rolling day-ahead is
+    what better features (weather, load/RES forecasts) still have to buy.
+    See docs/ai-layer.md for the measured numbers.
+    """
+    days = _days(prices)
+    hours = [dict(zip(d.index.hour, d.to_numpy(), strict=True)) for d in days]
+    revenue, soc0, settled = 0.0, 0.0, []
+    for i in range(8, len(days)):
+        lo = max(7, i - train_days)
+        pred = []
+        for h in days[i].index.hour:
+            rows = [([hours[j - 1][h], hours[j - 7][h], 1.0], hours[j][h])
+                    for j in range(lo, i)
+                    if h in hours[j] and h in hours[j - 1] and h in hours[j - 7]]
+            x1, x7 = hours[i - 1].get(h), hours[i - 7].get(h)
+            if len(rows) >= 3 and x1 is not None and x7 is not None:
+                a = np.array([r[0] for r in rows])
+                y = np.array([r[1] for r in rows])
+                coef = np.linalg.lstsq(a, y, rcond=None)[0]
+                pred.append(float(coef @ [x1, x7, 1.0]))
+            else:  # burn-in or DST-odd hour: persistence fallback
+                pred.append(x1 if x1 is not None else float(days[i - 1].mean()))
+        plan = optimize(pd.Series(pred, index=days[i].index), bat, soc0=soc0).dispatch
+        revenue += float((days[i].to_numpy() * (plan["discharge"] - plan["charge"])).sum())
+        soc0 = max(0.0, plan["soc"].iloc[-1])
+        settled.append(days[i])
+    real = pd.concat(settled)
+    return Capture(optimize(real, bat).revenue_eur, revenue, len(real))
+
+
 def _demo() -> None:
     # ponytail: 6 synthetic days, valley/peak shape whose peak level AND hour
     # drift day to day — persistence keeps the shape but mistimes the peak.
@@ -156,6 +195,17 @@ def _demo() -> None:
     roll = rolling_day_ahead(px, bat)
     assert abs(iso.revenue_eur - roll.revenue_eur) < 1e-6, (iso, roll)
     print(f"demo ok: isotonic on perfect signal matches rolling ({iso.ratio:.1%})")
+
+    # 12 identical days: lag features predict exactly, so the learned model
+    # must match rolling day-ahead on its settled hours (day 8 onward)
+    flat_vals = np.tile(day(200, 0), 12).astype(float)
+    fidx = pd.date_range("2025-01-01", periods=len(flat_vals), freq="1h", tz="UTC")
+    fpx = pd.Series(flat_vals, index=fidx)
+    lrn = learned_forecast(fpx, bat)
+    roll_tail = rolling_day_ahead(fpx[fpx.index >= fidx[8 * 24]], bat)
+    assert abs(lrn.revenue_eur - roll_tail.revenue_eur) < 1e-6, (lrn, roll_tail)
+    print(f"demo ok: learned on identical days matches rolling ({lrn.ratio:.1%}, "
+          f"{lrn.hours} h settled)")
 
 
 if __name__ == "__main__":

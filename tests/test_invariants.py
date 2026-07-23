@@ -11,6 +11,7 @@ import pytest
 from bess_arbitrage.capture import (
     fit_supply_curve,
     isotonic_forecast,
+    learned_forecast,
     persistence_forecast,
     rolling_day_ahead,
 )
@@ -82,6 +83,21 @@ def test_isotonic_curve_and_capture(prices, bat):
     # perfectly informative signal (stress == price): matches rolling day-ahead
     perfect = isotonic_forecast(prices, prices, bat, train_prices=prices, train_stress=prices)
     assert abs(perfect.revenue_eur - rolling_day_ahead(prices, bat).revenue_eur) < 1e-6
+
+
+def test_learned_forecast_bounded_and_exact_on_repeats(bat):
+    day = np.array([30, 25, 20, 15, 10, 12, 40, 80, 90, 60, 30, 10,
+                    5, 8, 20, 45, 90, 140, 160, 120, 80, 60, 45, 35], dtype=float)
+    # 12 drifting days: still feasible for the full LP => ceiling dominates
+    px = np.concatenate([day * (1 + 0.05 * d) for d in range(12)])
+    idx = pd.date_range("2025-03-01", periods=len(px), freq="1h", tz="UTC")
+    drifting = pd.Series(px, index=idx)
+    assert 0 < learned_forecast(drifting, bat).ratio <= 1 + 1e-9
+    # 12 identical days: lags predict exactly => matches rolling day-ahead
+    flat = pd.Series(np.tile(day, 12), index=idx)
+    lrn = learned_forecast(flat, bat)
+    roll = rolling_day_ahead(flat[flat.index >= idx[8 * 24]], bat)
+    assert abs(lrn.revenue_eur - roll.revenue_eur) < 1e-6
 
 
 def test_degradation_reduces_net_and_throughput(prices, bat):
