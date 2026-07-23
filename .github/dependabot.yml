@@ -1,0 +1,12 @@
+# Weekly dependency-update PRs. Each PR runs the full CI, so an update that
+# breaks an LP invariant or a demo check is caught before merge.
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
