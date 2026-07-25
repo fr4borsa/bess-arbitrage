@@ -71,13 +71,26 @@ What these numbers actually say:
   the ex-ante variant scores 72.0% — the regime problem, not the forecast,
   is the binding constraint there.
 
+- **Curve freshness is NOT the FR fix — tested and falsified.** The obvious
+  hypothesis for FR ("the 2025 curve is stale, refit it on recent data") got
+  its own variant: `isotonic_rolling_forecast` refits the curve every day on
+  the trailing 60 *French* days. Result: 71.5%, marginally *below* the static
+  curve's 72.0%. So FR's problem is not regime staleness — in a
+  nuclear-dominated market, residual load is simply a weak predictor of the
+  hourly price *ordering* (dispatchable nuclear, exports, hydro absorb it).
+  The FR fix has to be different *features*, not a fresher curve. The useful
+  positive from the same run: in DE the 60-day trailing curve matches the
+  full-prior-year one (91.6% vs 91.7%) — **two months of history are enough**,
+  which matters when sweeping 35 atlas zones.
+
 So a *real* AI layer for this repo is not a bigger network — it is better
 inputs, and the ex-ante result shows the pipeline for them now exists
-end-to-end. What's left on top: fuel and CO₂ prices to condition the supply
-curve by regime (the FR fix), and probabilistic output (quantiles instead of
-a point forecast) so the bidder can trade expected revenue against risk —
-something no point forecast can express. Anything fancier has to first beat
-these baselines on the same two zones, out of sample.
+end-to-end. What's left on top: features that carry price information in
+non-solar regimes (nuclear availability, interconnector flows, fuel/CO₂
+prices), and probabilistic output (quantiles instead of a point forecast) so
+the bidder can trade expected revenue against risk — something no point
+forecast can express. Anything fancier has to first beat these baselines on
+the same two zones, out of sample.
 
 ## Slot 3: narration — optional, low stakes
 

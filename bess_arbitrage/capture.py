@@ -125,6 +125,36 @@ def isotonic_forecast(prices: pd.Series, stress: pd.Series, bat: Battery,
     return Capture(optimize(real, bat).revenue_eur, revenue, len(real))
 
 
+def isotonic_rolling_forecast(prices: pd.Series, stress: pd.Series, bat: Battery,
+                              hist_prices: pd.Series, hist_stress: pd.Series,
+                              train_days: int = 60) -> Capture:
+    """Regime-adaptive isotonic: the supply curve is refit EVERY DAY on the
+    trailing train_days of realized (stress, price) history, then today's
+    prices are predicted from `stress` (pass the TSO day-ahead forecast for a
+    true ex-ante run). Settled at real prices, SOC chained.
+
+    hist_prices/hist_stress must extend at least train_days before
+    prices.index[0] (realized data — it is history, so ex-ante legitimate).
+    The fix for regime transfer: a curve fit on last year's Germany-style
+    solar regime misprices nuclear France; the trailing window prices the
+    market as it behaves NOW. See docs/ai-layer.md.
+    """
+    hist = pd.concat([hist_stress, hist_prices], axis=1, join="inner").dropna()
+    aligned = pd.concat([prices, stress], axis=1, join="inner").dropna()
+    revenue, soc0, settled = 0.0, 0.0, []
+    for day in _days(aligned.iloc[:, 0]):
+        t = day.index[0].normalize()
+        win = hist[(hist.index >= t - pd.Timedelta(days=train_days)) & (hist.index < t)]
+        curve = fit_supply_curve(win.iloc[:, 0], win.iloc[:, 1])
+        pred = _step_predict(curve, aligned.iloc[:, 1].loc[day.index])
+        plan = optimize(pred, bat, soc0=soc0).dispatch
+        revenue += float((day.to_numpy() * (plan["discharge"] - plan["charge"])).sum())
+        soc0 = max(0.0, plan["soc"].iloc[-1])
+        settled.append(day)
+    real = pd.concat(settled)
+    return Capture(optimize(real, bat).revenue_eur, revenue, len(real))
+
+
 def learned_forecast(prices: pd.Series, bat: Battery, train_days: int = 28) -> Capture:
     """Optimize on prices from a per-hour linear model
     price[d,h] = a_h*price[d-1,h] + b_h*price[d-7,h] + c_h — least-squares on a
@@ -196,6 +226,16 @@ def _demo() -> None:
     roll = rolling_day_ahead(px, bat)
     assert abs(iso.revenue_eur - roll.revenue_eur) < 1e-6, (iso, roll)
     print(f"demo ok: isotonic on perfect signal matches rolling ({iso.ratio:.1%})")
+
+    # rolling-curve variant, same perfect-signal identity: history = the same
+    # 6 days duplicated one week earlier, so every trailing window sees the
+    # identity relation and predictions are exact
+    hist = pd.concat([pd.Series(px.to_numpy(), index=px.index - pd.Timedelta(days=6)), px])
+    iso_r = isotonic_rolling_forecast(px, px, bat, hist_prices=hist, hist_stress=hist,
+                                      train_days=6)
+    assert abs(iso_r.revenue_eur - roll.revenue_eur) < 1e-6, (iso_r, roll)
+    print(f"demo ok: rolling-curve isotonic matches rolling on perfect signal "
+          f"({iso_r.ratio:.1%})")
 
     # 12 identical days: lag features predict exactly, so the learned model
     # must match rolling day-ahead on its settled hours (day 8 onward)

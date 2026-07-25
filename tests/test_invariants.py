@@ -11,6 +11,7 @@ import pytest
 from bess_arbitrage.capture import (
     fit_supply_curve,
     isotonic_forecast,
+    isotonic_rolling_forecast,
     learned_forecast,
     persistence_forecast,
     rolling_day_ahead,
@@ -83,6 +84,22 @@ def test_isotonic_curve_and_capture(prices, bat):
     # perfectly informative signal (stress == price): matches rolling day-ahead
     perfect = isotonic_forecast(prices, prices, bat, train_prices=prices, train_stress=prices)
     assert abs(perfect.revenue_eur - rolling_day_ahead(prices, bat).revenue_eur) < 1e-6
+
+
+def test_isotonic_rolling_bounded_and_exact_on_perfect_signal(prices, bat):
+    hist = pd.concat(
+        [pd.Series(prices.to_numpy(), index=prices.index - pd.Timedelta(days=6)), prices])
+    # perfect signal (stress == price): trailing identity windows => matches rolling
+    c = isotonic_rolling_forecast(prices, prices, bat,
+                                  hist_prices=hist, hist_stress=hist, train_days=6)
+    assert abs(c.revenue_eur - rolling_day_ahead(prices, bat).revenue_eur) < 1e-6
+    # noisy signal: still feasible for the full LP => ceiling dominates
+    rng = np.random.default_rng(1)
+    stress = pd.Series(rng.normal(50, 20, len(prices)), index=prices.index)
+    shist = pd.Series(rng.normal(50, 20, len(hist)), index=hist.index)
+    n = isotonic_rolling_forecast(prices, stress, bat,
+                                  hist_prices=hist, hist_stress=shist, train_days=6)
+    assert n.ratio <= 1 + 1e-9
 
 
 def test_learned_forecast_bounded_and_exact_on_repeats(bat):

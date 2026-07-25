@@ -56,6 +56,7 @@ def main() -> None:
     if a.capture:
         from .capture import (
             isotonic_forecast,
+            isotonic_rolling_forecast,
             learned_forecast,
             persistence_forecast,
             rolling_day_ahead,
@@ -78,10 +79,20 @@ def main() -> None:
                                 train_prices=train_px, train_stress=train_rl)
         print(f"    isotonic supply crv : {iso.revenue_eur:,.0f} EUR -> {iso.ratio:.1%}"
               f"  (residual-load curve fit on {t0[:4]}, realized residual load)")
-        iso_x = isotonic_forecast(px, fetch_residual_load_forecast(a.bzn, a.start, a.end), bat,
+        fc = fetch_residual_load_forecast(a.bzn, a.start, a.end)
+        iso_x = isotonic_forecast(px, fc, bat,
                                   train_prices=train_px, train_stress=train_rl)
         print(f"    isotonic EX-ANTE    : {iso_x.revenue_eur:,.0f} EUR -> {iso_x.ratio:.1%}"
               f"  (same curve, TSO day-ahead load/RES forecasts — a real strategy)")
+        # regime-adaptive: curve refit daily on the trailing 60 realized days
+        import datetime as _dt
+        h0 = (_dt.date.fromisoformat(a.start) - _dt.timedelta(days=60)).isoformat()
+        iso_a = isotonic_rolling_forecast(
+            px, fc, bat,
+            hist_prices=fetch_day_ahead(a.bzn, h0, a.end),
+            hist_stress=fetch_residual_load(a.bzn, h0, a.end))
+        print(f"    isotonic 60d adaptv : {iso_a.revenue_eur:,.0f} EUR -> {iso_a.ratio:.1%}"
+              f"  (curve refit daily on trailing 60 realized days, ex-ante stress)")
     print()
 
     if a.plot:

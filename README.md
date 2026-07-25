@@ -78,6 +78,7 @@ DE-LU  2026-01-01..2026-06-30   (4343 h)
     learned linear      : 40,707 EUR -> 86.2%  (per-hour lag-1/lag-7 lstsq, 28d window, 4174 h settled)
     isotonic supply crv : 43,325 EUR -> 90.5%  (residual-load curve fit on 2025, realized residual load)
     isotonic EX-ANTE    : 43,915 EUR -> 91.7%  (same curve, TSO day-ahead load/RES forecasts — a real strategy)
+    isotonic 60d adaptv : 43,869 EUR -> 91.6%  (curve refit daily on trailing 60 realized days, ex-ante stress)
 ```
 
 Reading: the daily horizon alone costs ~3%; naive persistence keeps ~84%; cheap
@@ -203,8 +204,13 @@ CI runs the offline checks and the invariant tests on every push.
    [docs/ai-layer.md](docs/ai-layer.md). ~~Ex-ante features~~ shipped
    2026-07: TSO day-ahead load/RES forecasts drive the isotonic variant —
    in DE-LU it beats even the realized-fundamentals version (91.7% vs
-   90.5%), because the auction itself clears on forecasts. Still open:
-   regime-conditioned supply curves (the FR fix), probabilistic forecasts
+   90.5%), because the auction itself clears on forecasts.
+   ~~Regime-conditioned curves~~ tested 2026-07 and **falsified as the FR
+   fix**: a curve refit daily on the trailing 60 days scores 71.5% in FR
+   (static: 72.0%) — residual load is simply a weak feature in a nuclear
+   regime. Useful side-finding: 60 days of history match a full prior year
+   in DE (91.6% vs 91.7%). Still open: features for non-solar regimes
+   (nuclear availability, interconnector flows), probabilistic forecasts
    for risk-aware bidding.
 
 Work in progress — numbers and interfaces evolve. Issues and feedback welcome.
