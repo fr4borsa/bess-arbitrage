@@ -87,10 +87,17 @@ def fetch_residual_load_forecast(bzn: str = "DE-LU", start: str = "2025-01-01",
     country = bzn.split("-")[0].lower()
     parts: dict[str, pd.Series] = {}
     for pt in ("load", "solar", "wind_onshore", "wind_offshore"):
-        j = _get_json(FORECAST_API,
-                      {"country": country, "production_type": pt,
-                       "forecast_type": "day-ahead", "start": start, "end": end},
-                      CACHE_DIR / country / f"fc_{pt}_{start}_{end}.json", end)
+        try:
+            j = _get_json(FORECAST_API,
+                          {"country": country, "production_type": pt,
+                           "forecast_type": "day-ahead", "start": start, "end": end},
+                          CACHE_DIR / country / f"fc_{pt}_{start}_{end}.json", end)
+        except requests.HTTPError as e:
+            # countries with no offshore fleet 404 instead of returning empty
+            if pt == "wind_offshore" and e.response is not None \
+                    and e.response.status_code == 404:
+                continue
+            raise
         vals = j.get("forecast_values") or []
         if not vals:
             if pt == "wind_offshore":
