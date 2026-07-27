@@ -92,6 +92,37 @@ the bidder can trade expected revenue against risk — something no point
 forecast can express. Anything fancier has to first beat these baselines on
 the same two zones, out of sample.
 
+## Benchmark: a time-series foundation model, measured (2026-07)
+
+The "features beat model class" claim deserved a stress test against the
+strongest price-history-only model available: **Chronos-Bolt-small** (Amazon's
+pretrained time-series foundation model, ~48M parameters, zero-shot — no
+training on our data, runs locally). Same harness, same days, same 672 h of
+price history the learned-linear model gets (`experiments/chronos_capture.py`):
+
+| variant | information | DE-LU | FR |
+|---|---|---|---|
+| rolling day-ahead | today's real prices | 96.8% | 94.9% |
+| isotonic ex-ante | TSO fundamentals forecasts | **91.7%** | 72.0% |
+| **chronos-bolt zero-shot** | price history only | **90.7%** | **85.2%** |
+| learned linear | price history only | 86.2% | 79.3% |
+| persistence | yesterday's prices | 84.2% | 78.8% |
+
+Two lessons, one per zone:
+
+- **DE-LU**: model capacity closes most — not all — of the feature gap.
+  Chronos crushes the 3-parameter regression on identical information
+  (+4.5 pp) and lands within 1 pp of the fundamentals model. Features still
+  win, but the margin thinned from 5.5 pp to 1.0 pp.
+- **FR**: the foundation model is the **most robust** strategy — best
+  operable capture (85.2%, +6.4 pp over persistence) precisely where
+  fundamentals collapse, because it assumes nothing about *why* prices move.
+
+Updated verdict: fundamentals features and model capacity are complements,
+not rivals — the obvious frontier is feeding the fundamentals (RL forecast)
+to a capable model as a covariate. Chronos also outputs quantiles natively,
+which is the on-ramp to the probabilistic/risk-aware roadmap item.
+
 ## Slot 3: narration — optional, low stakes
 
 The monthly report is generated from the same headline functions the UI uses
