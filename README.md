@@ -209,8 +209,12 @@ CI runs the offline checks and the invariant tests on every push.
    fix**: a curve refit daily on the trailing 60 days scores 71.5% in FR
    (static: 72.0%) — residual load is simply a weak feature in a nuclear
    regime. Useful side-finding: 60 days of history match a full prior year
-   in DE (91.6% vs 91.7%). Still open: features for non-solar regimes
-   (nuclear availability, interconnector flows), probabilistic forecasts
-   for risk-aware bidding.
+   in DE (91.6% vs 91.7%). Benchmarked 2026-07 against a zero-shot
+   time-series foundation model (Chronos-Bolt,
+   `experiments/chronos_capture.py`): DE-LU 90.7% — within 1 pp of the
+   fundamentals model — and FR 85.2%, the best operable strategy where
+   fundamentals fail. Still open: features for non-solar regimes (nuclear
+   availability, interconnector flows), probabilistic forecasts for
+   risk-aware bidding, fundamentals-as-covariates for a capable model.
 
 Work in progress — numbers and interfaces evolve. Issues and feedback welcome.
