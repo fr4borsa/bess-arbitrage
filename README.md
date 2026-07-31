@@ -266,7 +266,15 @@ CI runs the offline checks and the invariant tests on every push.
    identical settled hours, capture + intraday rank-corr + RMSE, ex-ante
    contract stated. ~~Chronos-2 through the judge~~ shipped 2026-07: the
    first experiment run entirely through the interface, forecasts committed
-   as re-scoreable CSVs (`experiments/forecasts/`). Next: PriceFM.
+   as re-scoreable CSVs (`experiments/forecasts/`). ~~PriceFM through the
+   judge~~ shipped 2026-07 — the first dispatch-value benchmark of PriceFM
+   anywhere: pre-registered (`experiments/PROTOCOL-pricefm.md`), calibrated
+   on the authors' own fold (metrics reproduced to the 3rd decimal, inputs
+   gated at r = 1.0000 on the Dec 2025 overlap), then zero-shot on H1 2026:
+   **90.4% DE-LU / 83.1% FR** — the specialist loses the duel to Chronos-2
+   at the same information class by ~4 pp, and its better RMSE ranks it
+   wrong: euros follow hour ranking, not average error. The leaderboard is
+   now real: two external models, one judge.
 
 ### Candidate inputs under evaluation (2026-07)
 

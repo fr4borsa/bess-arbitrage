@@ -156,6 +156,39 @@ this repo has measured:
 - The rank-corr law holds: DE rank-corr 0.89 → 0.96 tracks the capture jump,
   RMSE nearly halves (27.6 → 18.2 EUR/MWh).
 
+## The specialist, judged: PriceFM (2026-07)
+
+Second external candidate through the judge, pre-registered
+(`experiments/PROTOCOL-pricefm.md`): **PriceFM** (arXiv 2508.04875), a
+Mixture-of-Experts + graph model built *specifically* for European day-ahead
+prices, fed the TSO load/solar/wind forecasts it was trained on — the same
+information class as Chronos-2 `+components`. Calibration first: the
+published checkpoint reproduces the authors' fold-3 metrics to the third
+decimal, and the input pipeline was gated against their own dataset on the
+December 2025 overlap (r = 1.0000 on all 8 series). Zero-shot on H1 2026:
+
+| variant | DE-LU | FR |
+|---|---|---|
+| chronos-2 + residual load | **94.2%** | **87.6%** |
+| chronos-2 + 4 components | 94.1% | 87.1% |
+| isotonic ex-ante | 91.7% | 72.0% |
+| **pricefm (specialist, cov.)** | **90.4%** | **83.1%** |
+| chronos-bolt price-only | 90.7% | 85.2% |
+| persistence (same hours) | 84.1% | 78.8% |
+
+The pre-registered duel — specialist vs generalist at the same information
+class — goes to the generalist by 3.7–4.0 pp. Two readings:
+
+- **Scale and breadth beat domain architecture.** Chronos-2's 120M
+  parameters pretrained on everything outperform a purpose-built
+  price model with graph priors — even on the market it was designed for.
+  In FR, PriceFM (83.1%) trails even price-only Chronos-Bolt (85.2%).
+- **RMSE ranks models wrong, again.** PriceFM's DE RMSE (21.2) beats
+  Bolt's (27.6-class) and sits near Chronos-2's, but its capture is
+  3.8 pp behind: the judge pays for hour *ranking* (rank-corr 0.93 vs
+  0.96), not average error. A dispatch-blind leaderboard would have
+  called this duel wrong.
+
 ## Slot 3: narration — optional, low stakes
 
 The monthly report is generated from the same headline functions the UI uses

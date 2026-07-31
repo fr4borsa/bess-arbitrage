@@ -81,4 +81,38 @@ by the run and not edited afterwards; analysis in `docs/ai-layer.md`.
 
 ## Results
 
-*(empty at pre-registration — filled by the run, not edited afterwards)*
+Run 2026-07-31 (pre-registration commit `ac5e893`). Input sanity gate on the
+December 2025 overlap: first attempt **failed as designed** (FR-solar
+r = 0.980 — energy-charts serves stretches of hourly values on the 15-min
+grid where the authors interpolated linearly; FR wind additionally excludes
+offshore in their dataset while DE includes it). Inputs rebuilt to match
+their preprocessing (per-day hourly-stretch detection → linear
+interpolation; wind composition chosen per zone on the overlap month), gate
+re-run: **all 8 series r = 1.0000, mean-ratio 1.000**. Then H1 2026:
+DE-LU 179 eligible days (4,296 h), FR 177 (4,248 h); baselines re-scored by
+the judge on the same hours.
+
+| | capture | rank-corr | RMSE | persistence | rolling |
+|---|---|---|---|---|---|
+| DE-LU | 90.4% | 0.93 | 21.2 | 84.1% | 96.7% |
+| FR | 83.1% | 0.86 | 21.3 | 78.8% | 94.8% |
+
+Hypotheses, as pre-registered:
+
+- **H1 (floor): confirmed.** +6.3 pp (DE) and +4.3 pp (FR) over persistence.
+- **H2 (the duel, primary): falsified.** PriceFM loses to Chronos-2
+  `+components` at the same information class by 3.7 pp (DE-LU, 90.4 vs
+  94.1) and 4.0 pp (FR, 83.1 vs 87.1). The specialist does not beat the
+  generalist; in FR it does not even beat price-only Chronos-Bolt (85.2%).
+- **H3 (DE, vs fundamentals): falsified.** 90.4% < 91.7% (isotonic
+  ex-ante).
+- **H4 (statistical cross-check): passed.** H1 2026 RMSE (21.2 / 21.3) is
+  in the same range as the authors' fold-3 test RMSE (24.3 / 18.8) — no
+  drastic degradation, so the result is a model verdict, not an input
+  artifact. Notably PriceFM's DE RMSE (21.2) is *better* than Chronos-2
+  +RL's (18.2 is better still) — but its capture is 3.8 pp worse: euros
+  follow hour *ranking*, not average error, and PriceFM's rank-corr (0.93)
+  trails Chronos-2's (0.96).
+
+Forecast CSVs in `experiments/forecasts/` — re-score with
+`uv run python -m bess_arbitrage.score <csv> --bzn <zone>`.
