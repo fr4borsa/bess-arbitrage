@@ -88,6 +88,44 @@ The ex-ante variant (TSO forecasts) even *beats* the realized-fundamentals one i
 the auction clears on forecasts, so forecasts predict it better. The full argument
 (and why dispatch itself needs no ML): [docs/ai-layer.md](docs/ai-layer.md).
 
+## Score your own forecast (`bess_arbitrage.score`)
+
+The judge's front door: bring any hourly day-ahead price forecast and get it
+scored in **euros captured by a battery**, against the same baselines, on the
+same settled hours.
+
+```bash
+uv run python -m bess_arbitrage.score forecast.csv --bzn DE-LU
+```
+
+`forecast.csv` = a timestamp column (naive timestamps are read as UTC) + a
+EUR/MWh column; header optional; window defaults to the forecast's own range.
+Real output (DE-LU, two January 2026 weeks, candidate = persistence built
+externally):
+
+```
+score DE-LU 2026-01-01..2026-01-14 — 311 h settled (common hours: candidate ∩ persistence)
+  candidate         :        681 / 1,467 EUR -> capture  46.4%   rank-corr  0.74   RMSE  37.9 EUR/MWh
+  rolling day-ahead :      1,459 / 1,467 EUR -> capture  99.4%   rank-corr  1.00   RMSE   0.0 EUR/MWh
+  persistence       :        681 / 1,467 EUR -> capture  46.4%   rank-corr  0.74   RMSE  37.9 EUR/MWh
+```
+
+Three properties make the number trustworthy:
+
+- **same protocol as every baseline** — per day, LP on the forecast, settled at
+  the real prices, SOC chained across midnight, capture = revenue / ceiling;
+- **fair by construction** — the baselines are scored *through the same
+  function* on the *same hours* as the candidate, not quoted from a table;
+- **rank-corr is reported** because it is the dispatch-relevant statistic: the
+  intraday Spearman correlation predicts the capture delta better than RMSE
+  (see [docs/ai-layer.md](docs/ai-layer.md)).
+
+**Ex-ante contract** (stated, not verifiable): the forecast for day D must use
+only information available before D's day-ahead auction (~12:00 CET on D-1).
+A capture at rolling-day-ahead level usually means the forecast peeked at the
+answer. From Python, `score(forecast, prices, bat)` / `compare(...)` take any
+`pd.Series` — that is the whole plug-in API.
+
 ## UI (Streamlit)
 
 ```bash
@@ -216,6 +254,13 @@ CI runs the offline checks and the invariant tests on every push.
    fundamentals fail. Still open: features for non-solar regimes (nuclear
    availability, interconnector flows), probabilistic forecasts for
    risk-aware bidding, fundamentals-as-covariates for a capable model.
+5. **The open judge** — position the repo as the public benchmark for the
+   forecast→dispatch→P&L bridge: any price forecast, scored in euros captured
+   by a battery. ~~Bring-your-own-forecast scorer~~ shipped 2026-07:
+   `bess_arbitrage.score` (CLI + `pd.Series` API), candidate vs baselines on
+   identical settled hours, capture + intraday rank-corr + RMSE, ex-ante
+   contract stated. Next through this interface: Chronos-2 with TSO
+   known-future covariates (protocol to be pre-registered), PriceFM.
 
 ### Candidate inputs under evaluation (2026-07)
 
