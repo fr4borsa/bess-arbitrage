@@ -274,7 +274,13 @@ CI runs the offline checks and the invariant tests on every push.
    **90.4% DE-LU / 83.1% FR** — the specialist loses the duel to Chronos-2
    at the same information class by ~4 pp, and its better RMSE ranks it
    wrong: euros follow hour ranking, not average error. The leaderboard is
-   now real: two external models, one judge.
+   now real: two external models, one judge. ~~Capture saturation~~
+   documented 2026-07 in [docs/ai-layer.md](docs/ai-layer.md): every point
+   of forecast accuracy buys fewer euros than the last (persistence 84.6%
+   free → +6.8 pp from a foundation model → +2.8 pp from covariates →
+   2.5 pp forever out of reach), with the mechanism (the LP compresses
+   forecast differences) and three independent 2026 papers converging on
+   the same law; rank-corr promoted to primary statistical diagnostic.
 
 ### Candidate inputs under evaluation (2026-07)
 

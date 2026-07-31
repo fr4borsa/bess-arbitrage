@@ -189,6 +189,50 @@ class — goes to the generalist by 3.7–4.0 pp. Two readings:
   0.96), not average error. A dispatch-blind leaderboard would have
   called this duel wrong.
 
+## Saturation: why the next point of accuracy buys less (2026-07)
+
+Line up everything this repo has measured on the same window (DE-LU H1 2026)
+and the shape of the curve is the finding:
+
+| step | capture | marginal gain | RMSE | rank-corr |
+|---|---|---|---|---|
+| persistence (free) | 84.6% | — | 39.0 | 0.78 |
+| chronos-2 price-only | 91.4% | +6.8 pp | 27.6 | 0.89 |
+| chronos-2 + RL covariate | 94.2% | +2.8 pp | 18.2 | 0.96 |
+| rolling (perfect info) | 96.7% | +2.5 pp | 0.0 | 1.00 |
+
+The first step is free and captures ~85% of everything. A frontier
+foundation model buys 7 more points. The best ex-ante information buys 3.
+And the entire remaining budget — infinitely better forecasting — is worth
+2.5 points. **Every euro of forecast improvement costs more than the last.**
+
+Three independent 2026 results say this is structural, not a quirk of ours:
+
+- **Falezza (ETH, arXiv 2604.12082)** finds a *τ-sufficiency threshold* on
+  German markets: forecasts with Kendall rank correlation ≈ 0.85–0.95
+  already capture 97–100% of perfect-foresight revenue, and halving MAE
+  from an already-good level buys ~0.5 pp of decision quality. This is an
+  external replication of the rank-corr law we measured on the 10-zone
+  sensitivity screen (intraday Spearman predicts the iso−pers capture
+  delta) — and of why we report rank-corr on every scorecard.
+- **Maciejowska, Lipiecki & Uniejewski (arXiv 2511.13616)**: on German
+  data 2020–24, the statistically most accurate model (NARX, best
+  RMSE/MAE) is *not* the most profitable (LEAR earns more). Accuracy
+  leaderboards rank models wrong — our PriceFM result reproduced exactly
+  this inversion (better RMSE than Bolt, fewer euros).
+- **Hirsch & Ziel (arXiv 2604.19580)** give the mechanism: the battery
+  optimization *compresses* distributional information — materially
+  different forecasts can produce identical optimal bids. Past a quality
+  threshold, the LP literally cannot see the improvement.
+
+Consequences for this repo, stated as policy: (1) the scoreboard is euros,
+never RMSE — a statistical leaderboard would have called our
+specialist-vs-generalist duel backwards; (2) **rank-corr is the primary
+statistical diagnostic** — it is the accuracy dimension the LP can still
+see; (3) marginal forecast work should target hour *ranking* (peak timing,
+regime days like the May 1st holiday miss), not average error — that is
+where euros still live between 94.2% and 96.7%.
+
 ## Slot 3: narration — optional, low stakes
 
 The monthly report is generated from the same headline functions the UI uses
