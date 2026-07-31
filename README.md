@@ -251,16 +251,22 @@ CI runs the offline checks and the invariant tests on every push.
    time-series foundation model (Chronos-Bolt,
    `experiments/chronos_capture.py`): DE-LU 90.7% — within 1 pp of the
    fundamentals model — and FR 85.2%, the best operable strategy where
-   fundamentals fail. Still open: features for non-solar regimes (nuclear
-   availability, interconnector flows), probabilistic forecasts for
-   risk-aware bidding, fundamentals-as-covariates for a capable model.
+   fundamentals fail. ~~Fundamentals-as-covariates~~ measured 2026-07 with a
+   pre-registered protocol (`experiments/PROTOCOL-chronos2.md`): Chronos-2
+   zero-shot + the ex-ante TSO residual-load forecast as a known-future
+   covariate scores **94.2% in DE-LU and 87.6% in FR** — the best operable
+   strategy in both zones, worth ~4x what model scale alone bought. The
+   4 disaggregated TSO components never beat the aggregate. Still open:
+   probabilistic forecasts for risk-aware bidding, features for non-solar
+   regimes beyond RL (nuclear availability, interconnector flows).
 5. **The open judge** — position the repo as the public benchmark for the
    forecast→dispatch→P&L bridge: any price forecast, scored in euros captured
    by a battery. ~~Bring-your-own-forecast scorer~~ shipped 2026-07:
    `bess_arbitrage.score` (CLI + `pd.Series` API), candidate vs baselines on
    identical settled hours, capture + intraday rank-corr + RMSE, ex-ante
-   contract stated. Next through this interface: Chronos-2 with TSO
-   known-future covariates (protocol to be pre-registered), PriceFM.
+   contract stated. ~~Chronos-2 through the judge~~ shipped 2026-07: the
+   first experiment run entirely through the interface, forecasts committed
+   as re-scoreable CSVs (`experiments/forecasts/`). Next: PriceFM.
 
 ### Candidate inputs under evaluation (2026-07)
 

@@ -123,6 +123,39 @@ not rivals — the obvious frontier is feeding the fundamentals (RL forecast)
 to a capable model as a covariate. Chronos also outputs quantiles natively,
 which is the on-ramp to the probabilistic/risk-aware roadmap item.
 
+## The complement hypothesis, tested: Chronos-2 + TSO covariates (2026-07)
+
+The frontier above was then measured, pre-registered before the run
+(`experiments/PROTOCOL-chronos2.md`): **Chronos-2** (120M, zero-shot,
+native known-future covariates) fed the same ex-ante TSO forecasts the
+isotonic model uses, three arms per zone, all scored by
+`bess_arbitrage.score` on identical hours:
+
+| variant | information | DE-LU | FR |
+|---|---|---|---|
+| rolling day-ahead | today's real prices | 96.7% | 94.9% |
+| **chronos-2 + residual load** | price history + TSO forecasts | **94.2%** | **87.6%** |
+| chronos-2 + 4 components | price history + TSO forecasts | 94.1% | 87.1% |
+| chronos-2 price-only | price history only | 91.4% | 84.1% |
+| chronos-bolt zero-shot | price history only | 90.7% | 85.2% |
+| isotonic ex-ante | TSO fundamentals forecasts | 91.7% | 72.0% |
+| persistence | yesterday's prices | 84.6% | 79.0% |
+
+The complement hypothesis is confirmed, and it is the largest single step
+this repo has measured:
+
+- **Covariates are worth ~4x scale.** Going Bolt→Chronos-2 on price history
+  buys +0.7 pp in DE and *loses* 1.1 pp in FR; adding the residual-load
+  forecast buys +2.8 pp (DE) and +3.5 pp (FR). Information beats parameters.
+- **New best operable strategy in both zones**: 94.2% DE (2.5 pp below the
+  perfect-information ceiling) and 87.6% FR — where every fundamentals-only
+  model collapses (isotonic: 72.0%).
+- **Aggregation is free**: the 4 disaggregated TSO series never beat the
+  single residual-load covariate. The merit order responds to one number,
+  and giving the model the parts adds noise, not signal.
+- The rank-corr law holds: DE rank-corr 0.89 → 0.96 tracks the capture jump,
+  RMSE nearly halves (27.6 → 18.2 EUR/MWh).
+
 ## Slot 3: narration — optional, low stakes
 
 The monthly report is generated from the same headline functions the UI uses
@@ -137,5 +170,5 @@ produce them. Not before slots 1–2 are settled; the value is cosmetic.
 | slot | verdict | why |
 |---|---|---|
 | dispatch | no | LP is exactly optimal, milliseconds, hard bound |
-| forecasting | yes — the only slot with measurable € value | 10–16 pp of ceiling at stake; features > model class |
+| forecasting | yes — the only slot with measurable € value | 10–16 pp of ceiling at stake; features *through* a capable model beat either alone (94.2% DE / 87.6% FR) |
 | narration | later, maybe | cosmetic value, credibility risk |
