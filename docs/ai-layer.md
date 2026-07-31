@@ -249,6 +249,23 @@ see; (3) marginal forecast work should target hour *ranking* (peak timing,
 regime days like the May 1st holiday miss), not average error — that is
 where euros still live between 94.2% and 96.7%.
 
+## The distribution, judged: quantile dispatch buys nothing (2026-07)
+
+The last open forecast question — does the predictive *distribution* pay,
+beyond its median? — was pre-registered
+(`experiments/PROTOCOL-quantile-dispatch.md`) and measured with Chronos-2
+`+RL` quantiles on H1 2026: dispatch on the integrated mean (asymmetry) and
+on CVaR scenario-LPs (risk aversion) vs the median control. Verdict: **every
+arm within 0.8 pp, and the risk-averse arms make the worst days *worse***.
+The structural reason is worth stating: a day-ahead-only battery can always
+do nearly nothing, so its worst settled day is already ≈ 0 (DE min +18 EUR,
+FR min −7 EUR over 174 days) — there is no downside to insure, and paying
+expected euros for "safety" buys negative value. This is Hirsch & Ziel's
+information-compression measured live, and it closes the probabilistic
+question *at this layer*: the quantiles' real leverage is upstream, in
+cross-market allocation (DA vs FCR/aFRR), where uncertainty actually binds
+— the right home for the next probabilistic experiment.
+
 ## Slot 3: narration — optional, low stakes
 
 The monthly report is generated from the same headline functions the UI uses

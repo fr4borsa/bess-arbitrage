@@ -51,4 +51,35 @@ mechanism, designed with the methodologist before any number was seen (D4).
 
 ## Results
 
-*(empty at pre-registration)*
+Run 2026-07-31 (pre-registration commit `69b483d`). **Amendment, documented
+before the arm ran**: Chronos-2's native "mean" output turned out to be an
+alias of the median (verified: max diff 0.0), so the mean arm uses the
+quantile-integrated mean (average of the 9 curves) instead. Internal
+validation: the regenerated median reproduces the committed
+`chronos2-RL-*.csv` bit-exactly (max diff 0.000 EUR/MWh) in both zones.
+
+| arm | DE capture | DE std/day | DE worst-5% | DE min | FR capture | FR std/day | FR worst-5% | FR min |
+|---|---|---|---|---|---|---|---|---|
+| median (control) | 94.2% | 196 | 28 | 18 | 87.6% | 138 | 25 | −7 |
+| mean (integrated) | 94.1% | 196 | 28 | 20 | 87.6% | 138 | 25 | −7 |
+| CVaR λ=0.5 | 94.2% | 195 | 28 | 18 | 87.7% | 135 | 27 | −9 |
+| CVaR λ=1.0 | 94.0% | 194 | 28 | 17 | 86.8% | 136 | 24 | −14 |
+
+- **H1 (asymmetry): falsified.** The integrated mean scores a hair BELOW
+  the median (−11 EUR DE, −23 EUR FR — a rounding error on 44k). The
+  predictive distribution is right-skewed, but the LP dispatches on hour
+  *ranking*, which the skew barely changes.
+- **H2 (risk premium): falsified decisively.** Full CVaR (λ=1) gives up
+  0.2–0.8 pp of capture and makes the worst day WORSE in both zones
+  (DE min 18→17, FR min −7→−14 EUR). There is no risk to insure at this
+  layer: the worst settled day of the half-year is +18 EUR in DE and
+  −7 EUR in FR — a battery can always do (nearly) nothing, so the daily
+  downside is structurally bounded near zero. Risk-aware bidding here
+  costs euros and buys nothing.
+- **H3 (compression): confirmed.** Every arm within 0.8 pp; Hirsch &
+  Ziel's information-compression measured live on our own harness.
+
+Reading for the roadmap: the value of the quantiles is NOT in day-ahead
+dispatch — it is upstream, in *allocation* decisions across markets
+(DA vs FCR/aFRR commitment), where Falezza (arXiv 2604.12082) finds the
+real leverage. That is where a probabilistic experiment belongs next.

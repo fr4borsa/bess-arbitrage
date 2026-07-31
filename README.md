@@ -251,7 +251,14 @@ CI runs the offline checks and the invariant tests on every push.
    time-series foundation model (Chronos-Bolt,
    `experiments/chronos_capture.py`): DE-LU 90.7% — within 1 pp of the
    fundamentals model — and FR 85.2%, the best operable strategy where
-   fundamentals fail. ~~Train-on-forecast for the isotonic~~ tested
+   fundamentals fail. ~~Probabilistic dispatch~~ tested 2026-07
+   (`experiments/PROTOCOL-quantile-dispatch.md`) and **falsified at this
+   layer**: dispatching on the integrated mean or on CVaR scenario-LPs
+   moves capture by ≤ 0.8 pp, and full risk-aversion makes the worst days
+   *worse* — a DA-only battery's worst day is already ≈ 0 EUR, so there is
+   no downside to insure. The quantiles' leverage is upstream, in
+   cross-market allocation (DA vs FCR/aFRR) — queued there.
+   ~~Train-on-forecast for the isotonic~~ tested
    2026-07 (`experiments/PROTOCOL-iso-train-on-forecast.md`): worth ~0 in
    DE (distributions already aligned), +1 pp in FR, **+8 pp in NL** where
    the realized series is broken at the source — alignment pays in
