@@ -266,6 +266,22 @@ question *at this layer*: the quantiles' real leverage is upstream, in
 cross-market allocation (DA vs FCR/aFRR), where uncertainty actually binds
 — the right home for the next probabilistic experiment.
 
+## The allocation layer, first measurements (2026-07)
+
+Where the quantiles were supposed to matter — cross-market allocation —
+got its pre-registered 2×2 (`experiments/PROTOCOL-stack-allocation.md`,
+DE Q2 2026): plan the stack co-optimization on the Chronos-2 forecast
+instead of persistence, and replace the blind aFRR bid (yesterday's mean)
+with an EV-optimal bid on the trailing marginals. Verdicts: the forecast
+pays **+1.5 pp** of stack capture (real, but ~7× smaller than in pure DA —
+capacity revenue dilutes it), and the naive probabilistic bid **destroys
+~5 pp**: it chases the marginal price, wins 58% of auctions instead of
+65%, and the freed-capacity DA recovery doesn't come close to covering
+lost capacity revenue. The auction's non-linearity is real but punishes
+uncalibrated sophistication — the humble persistence bid stands, and a
+proper bid-shading model (opportunity-cost-aware, non-stationarity
+-corrected) is the measured bar any future attempt has to clear.
+
 ## Slot 3: narration — optional, low stakes
 
 The monthly report is generated from the same headline functions the UI uses

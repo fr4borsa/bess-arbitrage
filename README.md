@@ -256,8 +256,14 @@ CI runs the offline checks and the invariant tests on every push.
    layer**: dispatching on the integrated mean or on CVaR scenario-LPs
    moves capture by ≤ 0.8 pp, and full risk-aversion makes the worst days
    *worse* — a DA-only battery's worst day is already ≈ 0 EUR, so there is
-   no downside to insure. The quantiles' leverage is upstream, in
-   cross-market allocation (DA vs FCR/aFRR) — queued there.
+   no downside to insure. ~~Cross-market allocation 2×2~~ measured
+   2026-07 (`experiments/PROTOCOL-stack-allocation.md`, DE Q2 2026):
+   planning the stack on the Chronos-2 forecast pays **+1.5 pp** of stack
+   capture (7× less than in pure DA — dilution), while the naive
+   EV-optimal aFRR bid **loses ~5 pp** vs bidding yesterday's mean — the
+   auction's non-linearity punishes uncalibrated sophistication. Open:
+   a real bid-shading model (opportunity-cost-aware, non-stationarity
+   corrected) with this 2×2 as its measured bar.
    ~~Train-on-forecast for the isotonic~~ tested
    2026-07 (`experiments/PROTOCOL-iso-train-on-forecast.md`): worth ~0 in
    DE (distributions already aligned), +1 pp in FR, **+8 pp in NL** where

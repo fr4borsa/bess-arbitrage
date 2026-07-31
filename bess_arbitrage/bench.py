@@ -57,6 +57,8 @@ def run_bench(start: str, end: str, bat: Battery,
 def run_sequential(start: str, end: str, bat: Battery,
                    fetch_px: Callable[..., pd.Series] = fetch_day_ahead,
                    fetch_products: Callable[..., pd.DataFrame] = fetch_products_de,
+                   plan_forecast: pd.Series | None = None,
+                   afrr_bid_hist_days: int = 0,
                    ) -> dict:
     """Gate-by-gate operation with yesterday's information (the stack analogue
     of the persistence capture ratio):
@@ -70,6 +72,15 @@ def run_sequential(start: str, end: str, bat: Battery,
 
     Feasible by construction: the plan dispatch satisfies the same constraint
     set from the same soc0, and losing an award only relaxes it.
+
+    Experiment hooks (defaults reproduce the behavior above exactly — see
+    experiments/PROTOCOL-stack-allocation.md):
+    - plan_forecast: hourly ex-ante DA price forecast (any tz); when it fully
+      covers day D, the plan LP runs on D's forecast instead of D-1 prices.
+    - afrr_bid_hist_days > 0: EV-optimal aFRR bids — per product x block,
+      choose among the trailing-N-days empirical marginals the bid that
+      maximizes bid * P(award | bid). Bid objective ignores the DA value of
+      freed capacity (declared simplification); settlement is unchanged.
     """
     px = fetch_px("DE-LU", start, end).tz_convert("Europe/Berlin")
     days = [g for _, g in px.groupby(px.index.date) if len(g) == 24]
@@ -78,16 +89,32 @@ def run_sequential(start: str, end: str, bat: Battery,
     dates = [g.index[0].date() for g in days]
     mean_all = fetch_products(dates, stat="mean")
     max_all = fetch_products(dates, stat="max")
+    if plan_forecast is not None:
+        plan_forecast = plan_forecast.tz_convert("Europe/Berlin")
+    hist_dates: list = []
+    if afrr_bid_hist_days:
+        import datetime as _dt
+        hist_dates = [dates[0] - _dt.timedelta(days=k)
+                      for k in range(afrr_bid_hist_days, 0, -1)]
+        hist_max = pd.concat([fetch_products(hist_dates, stat="max"), max_all],
+                             ignore_index=True)
+        all_dates = hist_dates + dates
 
     cols = ("fcr", "afrr_pos", "afrr_neg")
     soc = 0.0
     da_eur = fcr_eur = afrr_eur = 0.0
+    n_bid = n_won = 0
     awards: dict = {}  # date -> awarded aFRR MW per block, for the activation layer
     for i in range(1, len(days)):
         yday_prod = mean_all.iloc[(i - 1) * 6: i * 6].reset_index(drop=True)
         today_mean = mean_all.iloc[i * 6: (i + 1) * 6].reset_index(drop=True)
         today_max = max_all.iloc[i * 6: (i + 1) * 6].reset_index(drop=True)
-        plan = optimize(days[i - 1], bat, soc0=soc, products=yday_prod)
+        plan_px = days[i - 1]
+        if plan_forecast is not None:
+            fc_day = plan_forecast.reindex(days[i].index)
+            if not fc_day.isna().any():
+                plan_px = fc_day
+        plan = optimize(plan_px, bat, soc0=soc, products=yday_prod)
         mw = {c: [float(plan.dispatch[c].iloc[b * 4]) if c in plan.dispatch else 0.0
                   for b in range(6)] for c in cols}
         awarded = {c: list(mw[c]) for c in cols}
@@ -95,8 +122,19 @@ def run_sequential(start: str, end: str, bat: Battery,
             fcr_eur += mw["fcr"][b] * float(today_mean["fcr"].iloc[b])  # clearing, price-taker
             for c in ("afrr_pos", "afrr_neg"):
                 bid = float(yday_prod[c].iloc[b])
+                if afrr_bid_hist_days:
+                    j = all_dates.index(dates[i])
+                    lo = max(0, j - afrr_bid_hist_days)
+                    hist = hist_max[c].iloc[lo * 6 + b: j * 6 + b: 6].to_numpy(float)
+                    if len(hist):
+                        bid = max(set(hist),
+                                  key=lambda x: x * float((hist >= x - 1e-9).mean()))
+                if awarded[c][b] > 1e-9:
+                    n_bid += 1
                 if bid <= float(today_max[c].iloc[b]) + 1e-9:
                     afrr_eur += awarded[c][b] * bid
+                    if awarded[c][b] > 1e-9:
+                        n_won += 1
                 else:
                     awarded[c][b] = 0.0  # out of the auction: capacity freed for DA
         ex = optimize(days[i], bat, soc0=soc, committed=pd.DataFrame(awarded))
@@ -112,6 +150,7 @@ def run_sequential(start: str, end: str, bat: Battery,
         "capture": total / ceiling.revenue_eur if ceiling.revenue_eur else float("nan"),
         "split_eur": {"da": da_eur, "fcr": fcr_eur, "afrr": afrr_eur},
         "hours": len(settled),
+        "award_rate": n_won / n_bid if n_bid else float("nan"),
         "awards": awards, "px": settled,
     }
 
