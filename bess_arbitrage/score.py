@@ -111,6 +111,10 @@ def main() -> None:
     ap.add_argument("--cycles", type=float, default=1.5, help="max cycles/day (0 = unlimited)")
     a = ap.parse_args()
 
+    from pathlib import Path
+    if not Path(a.csv).is_file():
+        ap.error(f"file not found: {a.csv} — expected a CSV with a timestamp column "
+                 "and a EUR/MWh forecast column (header optional)")
     from .prices import fetch_day_ahead
     fc = read_forecast_csv(a.csv)
     start = a.start or str(fc.index[0].date())
