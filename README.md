@@ -251,7 +251,15 @@ CI runs the offline checks and the invariant tests on every push.
    time-series foundation model (Chronos-Bolt,
    `experiments/chronos_capture.py`): DE-LU 90.7% — within 1 pp of the
    fundamentals model — and FR 85.2%, the best operable strategy where
-   fundamentals fail. ~~Fundamentals-as-covariates~~ measured 2026-07 with a
+   fundamentals fail. ~~Train-on-forecast for the isotonic~~ tested
+   2026-07 (`experiments/PROTOCOL-iso-train-on-forecast.md`): worth ~0 in
+   DE (distributions already aligned), +1 pp in FR, **+8 pp in NL** where
+   the realized series is broken at the source — alignment pays in
+   proportion to data corruption; NL still lacks a fundamentals baseline
+   that beats persistence. Side-finding: a full-prior-year training window
+   beats the CLI's half-year convention by +1.1 pp in DE (92.8 vs 91.7) —
+   candidate CLI default change. ~~Fundamentals-as-covariates~~ measured
+   2026-07 with a
    pre-registered protocol (`experiments/PROTOCOL-chronos2.md`): Chronos-2
    zero-shot + the ex-ante TSO residual-load forecast as a known-future
    covariate scores **94.2% in DE-LU and 87.6% in FR** — the best operable

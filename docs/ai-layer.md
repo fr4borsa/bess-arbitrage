@@ -189,6 +189,22 @@ class — goes to the generalist by 3.7–4.0 pp. Two readings:
   0.96), not average error. A dispatch-blind leaderboard would have
   called this duel wrong.
 
+## Train on what you'll be fed: the alignment experiment (2026-07)
+
+The isotonic curve was trained on *realized* residual load but evaluated on
+the *TSO forecast* — a textbook train/test distribution mismatch. The
+pre-registered fix (`experiments/PROTOCOL-iso-train-on-forecast.md`):
+train on the historical forecast series instead. Measured verdict, H1 2026:
+worth **≈ 0 pp in DE-LU** (falsified: TSO forecasts are accurate there, so
+the distributions were already aligned), **≈ +1 pp in FR** (still 6+ pp
+below persistence — weak feature, not misalignment), and **+8 pp in NL** —
+where the realized series is broken at the source, training on forecasts
+is the difference between a garbage curve (69.9%) and a plausible one
+(77.9%, still short of persistence's 82.9%). The law: alignment pays in
+proportion to how corrupted the realized data are. Side-finding: a full
+prior-year training window beats the CLI's half-year convention in DE by
++1.1 pp (92.8% vs 91.7%) — window length was quietly load-bearing.
+
 ## Saturation: why the next point of accuracy buys less (2026-07)
 
 Line up everything this repo has measured on the same window (DE-LU H1 2026)

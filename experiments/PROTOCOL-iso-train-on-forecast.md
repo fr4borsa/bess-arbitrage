@@ -43,4 +43,34 @@ prediction. Results below, filled by the run, not edited afterwards.
 
 ## Results
 
-*(empty at pre-registration)*
+Run 2026-07-31 (pre-registration commit `bc9118f`), evaluation stress
+always the TSO day-ahead forecast:
+
+| zone | persistence | static/realized | static/forecast | 60d/realized | 60d/forecast |
+|---|---|---|---|---|---|
+| DE-LU | 84.2% | 92.8% | 92.4% | 91.6% | 91.8% |
+| FR | 78.8% | 70.7% | 71.3% | 71.5% | 72.6% |
+| NL | 82.9% | 69.9% | 77.9% | 68.6% | 76.8% |
+
+- **H1 (DE): falsified.** Static −0.4 pp, 60d +0.2 pp — noise. Where the
+  TSO forecasts are accurate, the two training distributions are already
+  aligned and there is no mismatch to remove.
+- **H2 (FR): confirmed.** Changes of +0.6/+1.1 pp, still 6+ pp below
+  persistence — residual load stays a weak feature in the nuclear regime;
+  training alignment does not rescue it.
+- **H3 (NL): falsified on the pre-registered criterion, diagnosis
+  confirmed.** Forecast-training repairs **+8.0/+8.2 pp** over the
+  broken-realized curve — the largest single training fix measured in this
+  repo, confirming the realized series is broken at the source — but the
+  result (77.9%) still does not beat persistence (82.9%), so NL has no
+  publishable fundamentals baseline yet.
+- **Cross-finding (the real lesson):** the value of training on forecasts
+  scales with how corrupted the realized series is — DE ≈ 0, FR ≈ +1,
+  NL ≈ +8. Alignment is not a free lunch; it is insurance against bad
+  realized data.
+- **Side-finding:** the static DE curve fit on the FULL year 2025 scores
+  92.8% vs the published 91.7% (CLI trains on H1-2025 only, the
+  same-window-previous-year convention): +1.1 pp from training-window
+  length alone, and above the 60d adaptive (91.6%). Candidate CLI change,
+  left to the roadmap — it would shift published table numbers and
+  deserves its own diff.
