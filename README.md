@@ -217,4 +217,31 @@ CI runs the offline checks and the invariant tests on every push.
    availability, interconnector flows), probabilistic forecasts for
    risk-aware bidding, fundamentals-as-covariates for a capable model.
 
+### Candidate inputs under evaluation (2026-07)
+
+Exploratory leads from a research sweep — not commitments, listed here so
+they don't get lost:
+
+- **DST audit of the price pipeline** — a public battery-backtest repo
+  ([simin-tan/energy-storage-backtest](https://github.com/simin-tan/energy-storage-backtest))
+  documents the failure mode exactly: clock-change hours silently merged or
+  dropped produce revenue that "looks reasonable but is incorrect". Check
+  what `prices.py` does on the October/March transitions before closing the
+  open 15min→1h resampling verification (roadmap item 2 follow-up).
+- **Independent LP cross-check via [EAO](https://github.com/RIVACON/EAO)**
+  (`eaopack`, open-source portfolio-optimization framework): reproduce one
+  zone-month of DA dispatch and compare revenues against our LP. Agreement
+  gives an external validation baseline; disagreement finds a bug either way.
+- **Imbalance-price module** (possible market #4 after DA/FCR/aFRR): the
+  market-rule-informed NN of Yu et al. (*Advanced Engineering Informatics*,
+  code public, Austrian market) embeds imbalance-pricing rules in the
+  architecture — ~90% fewer parameters at equal accuracy. Same philosophy as
+  our fundamentals-informed forecast layer; start from their code if this
+  opens.
+- **Connection-constraint context** (roadmap item 3's open "grid-fee and
+  connection-constraint impacts"): [grid.joanmarcriera.es](https://grid.joanmarcriera.es)
+  publishes per-node demand-connection headroom across 11 EU countries;
+  cross-referencing headroom nodes with the atlas's top capture zones would
+  turn the business-case caveat into a map.
+
 Work in progress — numbers and interfaces evolve. Issues and feedback welcome.
