@@ -68,9 +68,12 @@ always the TSO day-ahead forecast:
   scales with how corrupted the realized series is — DE ≈ 0, FR ≈ +1,
   NL ≈ +8. Alignment is not a free lunch; it is insurance against bad
   realized data.
-- **Side-finding:** the static DE curve fit on the FULL year 2025 scores
-  92.8% vs the published 91.7% (CLI trains on H1-2025 only, the
-  same-window-previous-year convention): +1.1 pp from training-window
-  length alone, and above the 60d adaptive (91.6%). Candidate CLI change,
-  left to the roadmap — it would shift published table numbers and
-  deserves its own diff.
+- **Side-finding (resolved 2026-07-31, same day):** the static DE curve
+  fit on the FULL year 2025 scores 92.8% vs the published 91.7% (CLI
+  convention: same window, previous year) — +1.1 pp from window length
+  alone. But the same table shows FR at 70.7% vs the published 72.0%:
+  **−1.3 pp**. The full-year window is zone-dependent, not a free lunch
+  (a longer window mixes regimes; in FR that hurts). Verdict: the CLI
+  default STAYS same-window-previous-year — adopting the variant that
+  wins in the zone we like best would be zone cherry-picking. Documented
+  in a code comment at the CLI train-window line.

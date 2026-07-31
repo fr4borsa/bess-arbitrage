@@ -71,7 +71,10 @@ def main() -> None:
         lrn = learned_forecast(px, bat)
         print(f"    learned linear      : {lrn.revenue_eur:,.0f} EUR -> {lrn.ratio:.1%}"
               f"  (per-hour lag-1/lag-7 lstsq, 28d window, {lrn.hours} h settled)")
-        # supply curve trained on the year before the window, evaluated in it
+        # supply curve trained on the year before the window, evaluated in it.
+        # Same-window-previous-year is deliberate: a full prior year scored
+        # +1.1 pp in DE but -1.3 pp in FR (zone-dependent, no free lunch) —
+        # see experiments/PROTOCOL-iso-train-on-forecast.md.
         t0, t1 = f"{int(a.start[:4]) - 1}{a.start[4:]}", f"{int(a.end[:4]) - 1}{a.end[4:]}"
         train_px = fetch_day_ahead(a.bzn, t0, t1)
         train_rl = fetch_residual_load(a.bzn, t0, t1)

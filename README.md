@@ -263,9 +263,11 @@ CI runs the offline checks and the invariant tests on every push.
    DE (distributions already aligned), +1 pp in FR, **+8 pp in NL** where
    the realized series is broken at the source — alignment pays in
    proportion to data corruption; NL still lacks a fundamentals baseline
-   that beats persistence. Side-finding: a full-prior-year training window
-   beats the CLI's half-year convention by +1.1 pp in DE (92.8 vs 91.7) —
-   candidate CLI default change. ~~Fundamentals-as-covariates~~ measured
+   that beats persistence. Side-finding, resolved same-day: a
+   full-prior-year training window buys +1.1 pp in DE (92.8 vs 91.7) but
+   *loses* 1.3 pp in FR (70.7 vs 72.0) — zone-dependent, so the CLI
+   default stays as is; picking the variant that wins in the favoured
+   zone would be cherry-picking. ~~Fundamentals-as-covariates~~ measured
    2026-07 with a
    pre-registered protocol (`experiments/PROTOCOL-chronos2.md`): Chronos-2
    zero-shot + the ex-ante TSO residual-load forecast as a known-future
