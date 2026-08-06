@@ -21,7 +21,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.0", "ruff>=0.8"]
+dev = ["pytest>=8.0", "ruff>=0.16.1"]
 
 [project.urls]
 Repository = "https://github.com/fr4borsa/bess-arbitrage"
