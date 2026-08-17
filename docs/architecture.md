@@ -33,6 +33,7 @@ regelleistung.net ───┘               ├─> model.py (LP, HiGHS)   ├�
 | `capture.py` | Capture-ratio variants: rolling, persistence, learned linear, isotonic | model |
 | `bench.py` | DA-only vs stacked ceiling; `--sequential` gate-by-gate simulation | model, balancing |
 | `atlas.py` | The same LP swept across ~35 bidding zones, ranked | model, capture |
+| `connection.py` | Stage 1 of BESS × data center: DC load profiles, connection-cap sweep (`cap_curve`), realized-side `settle()` | model |
 | `insights.py` | Headline generators shared by the UI and the report | atlas, bench |
 | `report.py` | Monthly markdown report (`reports/YYYY-MM.md`) | insights |
 | `app.py` / `app_map.py` | Streamlit control-room UI / Europe map | all of the above |
