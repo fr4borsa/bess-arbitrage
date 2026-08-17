@@ -101,10 +101,15 @@ class Result:
 BLOCK_H = 4  # DE capacity products (FCR, aFRR) clear in 4h blocks
 
 
+class Infeasible(RuntimeError):
+    """The connection cap cannot serve the firm load with this battery (connection.py)."""
+
+
 def optimize(prices: pd.Series, bat: Battery, soc0: float = 0.0,
              products: pd.DataFrame | None = None,
              committed: pd.DataFrame | None = None,
-             fcr_reserve_h: float = 0.25, afrr_reserve_h: float = 1.0) -> Result:
+             fcr_reserve_h: float = 0.25, afrr_reserve_h: float = 1.0,
+             load: pd.Series | None = None, cap_mw: float | None = None) -> Result:
     """Maximize arbitrage revenue over the given hourly price series [EUR/MWh].
 
     soc0: initial state of charge [MWh] — lets capture.py chain daily windows.
@@ -119,9 +124,21 @@ def optimize(prices: pd.Series, bat: Battery, soc0: float = 0.0,
     fcr_reserve_h / afrr_reserve_h: SOC headroom [h × MW committed]. FCR: DE
       prequalification requires full power for 15 min, both directions. aFRR:
       activations persist, 1 h in the product's own direction is conservative.
+    load / cap_mw: behind-the-meter mode (connection.py). load is a firm
+      site load [MW] the battery sits behind, cap_mw the grid-connection
+      limit: |load + charge - discharge| <= cap_mw every hour (import AND
+      export). Revenue stays the arbitrage revenue Σ p·(dis - chg): a
+      discharge that serves the load is an avoided purchase at the same
+      price, so the objective is unchanged and the ceiling (cap=None) is
+      the same number as standalone. load is what the DISPATCHER KNOWS
+      (perfect foresight here); the realized side lives in connection.settle.
     """
     if products is not None and committed is not None:
         raise ValueError("pass either products (co-optimize) or committed (fixed), not both")
+    if cap_mw is not None and (products is not None or committed is not None):
+        raise ValueError("connection cap and capacity products are not co-modeled")
+    if load is not None and (len(load) != len(prices) or not load.index.equals(prices.index)):
+        raise ValueError("load must be aligned with prices (same index)")
     p = prices.to_list()
     n = len(p)
     eff = math.sqrt(bat.rte)  # per-leg efficiency
@@ -193,10 +210,17 @@ def optimize(prices: pd.Series, bat: Battery, soc0: float = 0.0,
         days = max(1, n // 24)
         # capacity commitment consumes no cycles: activation is not modeled
         m += pulp.lpSum(dis) <= bat.max_cycles_per_day * cap * days
+    if cap_mw is not None:
+        ld = load.to_list() if load is not None else [0.0] * n
+        for t in range(n):  # grid import = load + charge - discharge, both ways capped
+            m += ld[t] + chg[t] - dis[t] <= cap_mw
+            m += ld[t] + chg[t] - dis[t] >= -cap_mw
 
     # ponytail: HiGHS in-process — PuLP's bundled CBC is x86, breaks on Apple Silicon.
     m.solve(pulp.HiGHS(msg=False))
     if pulp.LpStatus[m.status] != "Optimal":
+        if cap_mw is not None and pulp.LpStatus[m.status] == "Infeasible":
+            raise Infeasible(f"cap {cap_mw} MW cannot serve the load with this battery")
         raise RuntimeError(f"solver status: {pulp.LpStatus[m.status]}")
     disp = pd.DataFrame(
         {
@@ -207,6 +231,9 @@ def optimize(prices: pd.Series, bat: Battery, soc0: float = 0.0,
         },
         index=prices.index,
     )
+    if load is not None:
+        disp["load"] = load.to_numpy()
+        disp["grid"] = disp["load"] + disp["charge"] - disp["discharge"]
     stack = None
     if cvars:
         for col, vs in cvars.items():  # committed MW, block broadcast to hours
