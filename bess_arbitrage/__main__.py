@@ -25,6 +25,11 @@ def main() -> None:
                     help="EUR/MWh discharged degradation cost (0 = off; ~8 for merchant LFP)")
     ap.add_argument("--capture", action="store_true",
                     help="score rolling day-ahead and persistence-forecast dispatch vs the ceiling")
+    ap.add_argument("--dc-peak", type=float, default=0.0,
+                    help="MW: put the battery behind a data-center load with this peak (0 = off)")
+    ap.add_argument("--dc-profile", default="cooling", choices=("flat", "cooling"))
+    ap.add_argument("--cap", type=float, default=None,
+                    help="MW: grid-connection cap on |load + charge - discharge| (stage 1)")
     ap.add_argument("--plot", action="store_true")
     a = ap.parse_args()
 
@@ -52,6 +57,22 @@ def main() -> None:
     print(f"  investment (turnkey, 15y, 7% WACC, 2% opex, 1.5%/y fade): "
           f"NPV {res.npv():,.0f} EUR, IRR {irr_s} (merchant hurdle ~10%)")
     print("  note: perfect-foresight = upper bound; real dispatch with forecasts earns less.")
+
+    if a.cap is not None:
+        from .connection import PUE_MAX, dc_load
+        from .model import Infeasible
+        load = dc_load(px.index, a.dc_peak / PUE_MAX, a.dc_profile) if a.dc_peak else None
+        try:
+            capped = optimize(px, bat, load=load, cap_mw=a.cap)
+        except Infeasible:
+            print(f"  connection cap {a.cap:g} MW: INFEASIBLE — the battery cannot keep a "
+                  f"{a.dc_peak:g} MW ({a.dc_profile}) load under it")
+        else:
+            lost = 1 - capped.revenue_eur / res.revenue_eur if res.revenue_eur > 0 else float("nan")
+            print(f"  connection cap {a.cap:g} MW behind a {a.dc_peak:g} MW {a.dc_profile} DC: "
+                  f"revenue {capped.revenue_per_mw_year:,.0f} EUR/MW/year "
+                  f"({lost:.1%} of the ceiling lost), MW of connection bought "
+                  f"{a.dc_peak - a.cap:+g}, peak grid draw {capped.dispatch['grid'].max():.2f} MW")
 
     if a.capture:
         from .capture import (

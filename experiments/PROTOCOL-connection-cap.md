@@ -78,4 +78,65 @@ deliberate: it is the ceiling and the experimental control for stage 2
 
 ## Results
 
-_(filled after the run, same commit discipline as `1345f40` → `29aa8d2`)_
+Run 2026-08-17 (pre-registration commit `5be987f`), 2025-08-01 → 2026-07-31,
+**34 zones** (LV skipped: energy-charts unreachable at run time — re-run
+with `--zones LV --append`). Full tables and the curve:
+`reports/connection-cap-2025-08-01_2026-07-31.{md,csv,png}`. Cells: 34 zones ×
+2 profiles × 2 durations × 15 caps, + peak sensitivity on DE-LU/ES/CH.
+
+| | 2 h battery | 4 h battery |
+|---|---|---|
+| **flat**, loss at cap = peak (k = 0) | **100 %** in every zone | 100 % |
+| flat, any cap < peak | infeasible, every zone | infeasible |
+| flat, loss at k = +½ (half power headroom) | 3.0 % (ES) – 10.9 % (IT-Sardinia), median 5.7 % | 10.0 % – 23.8 %, median 15.9 % |
+| **cooling**, max MW bought | **0.30 P_bat, identical in all 34 zones** | **0.40 P_bat**, all zones |
+| cooling, loss at k = 0 (0 MW bought) | 3.8 % (GR) – 17.8 % (CH), median 9.5 % | 7.8 % (FI) – 32.3 % (CH), median 21.1 % |
+| cooling, loss at 0.1 P_bat bought | 8 – 29 %, median 17 % | 11 – 43 %, median 29 % |
+| cooling, loss at 0.2 P_bat bought | 14 – 46 %, median 31 % | 15 – 56 %, median 40 % |
+| cooling, loss at the max MW bought | 23 % (FI) – 67 % (CH), median 49 % | 31 % – 87 %, median 66 % |
+| cooling, MW bought at ≤ 10 % loss | 0 in 31/34 zones (0.1 in GR, FI, EE) | 0 everywhere |
+| average price of a bought MW at the max, €/MW-bought/y | 22 k (SE2) – 165 k (HU), median 123 k | 34 k – 281 k, median 212 k |
+
+Worked example, a 250 MW Gigafactory-scale site with a 50 MW battery
+(peak = 5 × P_bat): a 2 h battery can keep the site under **235 MW** (buys
+15 MW, −6 %) at the cost of about half its arbitrage revenue; a 4 h battery
+under **230 MW** (−8 %) at two thirds. Anything below is infeasible — the
+summer-afternoon excursion above the cap outlasts the battery. With a flat
+profile, nothing: the site needs 250 MW plus whatever the battery wants.
+
+- **H1 (flat load — Czyżak's "no surplus" claim): confirmed, and
+  quantified.** A flat data center buys **0 MW** with any battery; at
+  cap = peak the battery earns exactly zero because it can never charge; the
+  extra headroom it needs for its own arbitrage is cheap for a 2 h battery
+  (half its power costs 3–11 % of the ceiling, as pre-registered < 20 %) but
+  not for a 4 h one (10–24 %: it needs twice the charging energy through the
+  same door).
+- **H2 (cooling load — energy-limited): confirmed.** Max MW bought is
+  **0.30 P_bat (2 h) and 0.40 P_bat (4 h)**, identical across zones as
+  required (feasibility does not see prices); doubling the energy buys only
+  a third more MW. Loss is convex: the first 0.1 P_bat costs a median 17 %
+  (2 h), the last 0.1 costs ~18 pp more on top of 31 %. The site-peak
+  sensitivity confirms the mechanism: with peak = 10 × P_bat the same
+  battery buys 0.30/0.60 P_bat (relatively smaller excursion), with peak =
+  2 × P_bat only 0.10.
+- **H3 (where the trade is expensive): first half confirmed, second half
+  falsified.** DE-LU loses 11.1 % at k = 0 (< 15 % ✓). But the solar-heavy
+  zones lose **less**, not more: GR 3.8 %, BG 4.8 %, ES 6.8 %, PT 7.2 %,
+  IT-South 10.1 % vs DE-LU 11.1 %; the expensive zones are **CH 17.8 %,
+  IT-Sardinia 14.7 %, NO2 13.6 %, IT-North 13.5 %, IT-Centre-North 13.2 %**
+  — hydro/nuclear-shaped markets — and the cheapest are GR, EE, BG, FI, RO,
+  LT, SE2, ES. The pre-registered mechanism (cooling peak eats the headroom
+  exactly at the solar-cheap midday) is real but second-order: at k = 0 the
+  headroom is < 1 P_bat in *every* hour (0.93 at night, 0 at the summer
+  peak), so charging is throttled everywhere and the loss tracks how much of
+  a zone's ceiling comes from *fast, single-hour* charging (spiky, few-hour
+  spreads: CH, IT, NO) versus broad cheap blocks that a throttled battery can
+  still fill (Nordics, South-East). Reported as falsified; the mechanism is a
+  candidate, not a finding.
+
+Side-finding, not pre-registered: for the flat-vs-cooling comparison the
+cooling profile with 0 MW bought (k = 0) is *itself* the honest baseline
+for a peak-designed site — a real data center behind its nameplate
+connection already forfeits 4–18 % (2 h) / 8–32 % (4 h) of the standalone
+ceiling before buying a single MW. Stage 2 must measure capture against
+**this** number, not against the standalone ceiling.

@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 .venv/
 *.png
+# experiment charts referenced from the reports
+!reports/*.png
 .DS_Store
 .cache/
 opencode.json

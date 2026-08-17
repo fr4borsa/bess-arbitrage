@@ -131,10 +131,15 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--zones", nargs="*", default=list(ZONES))
     ap.add_argument("--quick", action="store_true", help="skip the peak sensitivity")
+    ap.add_argument("--append", action="store_true",
+                    help="merge into the existing CSV (re-run zones skipped by a network error)")
     a = ap.parse_args()
     OUT.mkdir(exist_ok=True)
     tag = f"connection-cap-{START}_{END}"
     all_ = run(a.zones, a.quick)
+    if a.append and (OUT / f"{tag}.csv").exists():
+        prev = pd.read_csv(OUT / f"{tag}.csv")
+        all_ = pd.concat([prev[~prev["zone"].isin(all_["zone"])], all_], ignore_index=True)
     all_.to_csv(OUT / f"{tag}.csv", index=False)
     md = summarize(all_)
     (OUT / f"{tag}.md").write_text(

@@ -201,6 +201,54 @@ with yesterday's information in a pay-as-bid market. Even operated this
 naively, the stack beats the *perfect-foresight* DA-only ceiling for the same
 month by a wide margin.
 
+## Stage 1 — the battery that buys the grid connection (BESS × data center)
+
+The bottleneck of a data center is the grid connection, not the energy. A
+battery behind the meter that keeps the site under a connection cap "buys"
+MW of connection the site would otherwise queue years for — and the same
+dispatch software keeps earning on the market. Stage 1 puts a number on the
+trade, at **perfect foresight** (the ceiling; stage 2 = dispatch on
+forecasts, measured against it):
+
+```bash
+# a 1 MW battery behind a 5 MW cooling-peaked data center, connection capped at 4.8 MW
+uv run python -m bess_arbitrage --bzn DE-LU --start 2025-08-01 --end 2026-07-31 --dc-peak 5 --cap 4.8
+```
+
+`optimize(prices, bat, load=, cap_mw=)` adds `|load + charge − discharge| ≤ cap`
+to the LP; `bess_arbitrage.connection` has the load profiles (flat, or
+cooling-peaked with the PUE band 1.10–1.35 from Ren-Islam-Wierman 2026), the
+sweep (`cap_curve`) and `settle()` — the realized side, kept apart from what
+the dispatcher knows so stage 2 does not redo the plumbing.
+
+Pre-registered protocol and results:
+[`experiments/PROTOCOL-connection-cap.md`](experiments/PROTOCOL-connection-cap.md),
+34 zones, 2025-08 → 2026-07
+([tables](reports/connection-cap-2025-08-01_2026-07-31.md),
+[curve](reports/connection-cap-2025-08-01_2026-07-31.png)):
+
+- **A flat data center buys 0 MW with any battery.** At cap = nameplate the
+  battery can never charge and earns exactly zero; below, infeasible.
+  Czyżak's "no surplus of power to charge the battery", quantified.
+- **With a cooling-peaked load the trade is energy-limited**: a 2 h battery
+  buys at most **0.30 × its power** in MW of connection, a 4 h one 0.40 —
+  identical in every zone (feasibility does not see prices) — and the last
+  MW costs far more than the first: 0.1 P_bat costs a median 17 % of the
+  ceiling, the max costs 23–67 %. At Gigafactory scale (250 MW site, 50 MW
+  battery) that is 235 MW instead of 250 for about half the arbitrage.
+- **Where it is expensive is not where expected**: hydro/nuclear-shaped
+  zones (CH 17.8 %, IT-Sardinia, NO2, IT-North) lose the most just for
+  sitting behind the meter, solar-heavy ones the least (GR 3.8 %, ES 6.8 %) —
+  the pre-registered hypothesis (solar zones worse) is falsified.
+
+Companion deep dive: [docs/gigafactories.md](docs/gigafactories.md) — the EU
+AI Gigafactories call from the primary sources (IP/26/1708; clean power ≈ 4 %
+of the score) and a replication of the "250 MW DC → 652–1000 MW batteries"
+sizing with the same LP stack
+([protocol](experiments/PROTOCOL-gigafactory-sizing.md)): the battery band
+reappears only at a grid penalty of ~1000 €/MWh — it is the price of
+near-banning grid power, not a property of European weather.
+
 ## Checks
 
 ```bash
@@ -208,6 +256,7 @@ uv run python -m bess_arbitrage.model    # offline LP self-check (arbitrage + st
 uv run python -m bess_arbitrage.capture  # offline capture-ratio self-check (synthetic days)
 uv run python -m bess_arbitrage.prices   # live API smoke test (last 7 days DE-LU)
 uv run python -m bess_arbitrage.atlas --demo  # offline atlas self-check (synthetic zones)
+uv run python -m bess_arbitrage.connection    # offline connection-cap self-check (stage 1)
 uv run python -m bess_arbitrage.bench --demo  # offline stack-benchmark self-check
 uv run python -m bess_arbitrage.balancing     # live API smoke test (regelleistung.net, one day)
 uv run pytest -q                              # LP invariants on synthetic data (offline)
@@ -235,8 +284,13 @@ CI runs the offline checks and the invariant tests on every push.
    `bench --sequential --activation` and a report section carry the band.
 3. **Battery realism** — ~~degradation-aware dispatch~~ shipped 2026-07:
    per-MWh cycle cost in the LP objective ("the battery that says no") plus an
-   investment view (payback band, NPV, IRR at turnkey capex). Still open:
-   grid-fee and connection-constraint impacts on the business case.
+   investment view (payback band, NPV, IRR at turnkey capex).
+   ~~Connection constraint~~ shipped 2026-08 as **stage 1 of BESS × data
+   center** (see the section above): behind-the-meter LP, load profiles,
+   pre-registered 34-zone sweep. Still open: grid fees; **stage 2** —
+   the same curve without foresight (dispatch on price *and* load
+   forecasts, `settle()` scoring cap violations), only after stage 1 is
+   published.
 4. **Forecast layer** — ~~learned-linear + isotonic capture baselines~~
    shipped 2026-07, with the measured verdict in
    [docs/ai-layer.md](docs/ai-layer.md). ~~Ex-ante features~~ shipped
