@@ -242,8 +242,9 @@ Pre-registered protocol and results:
   the pre-registered hypothesis (solar zones worse) is falsified.
 
 Companion deep dive: [docs/gigafactories.md](docs/gigafactories.md) — the EU
-AI Gigafactories call from the primary sources (IP/26/1708; clean power ≈ 4 %
-of the score) and a replication of the "250 MW DC → 652–1000 MW batteries"
+AI Gigafactories call from the primary sources (IP/26/1708 and the tender
+specifications: sustainability ≈ 2 % of the final award, grid flexibility ≈ 0.2 %,
+firm grid access ~8× that) and a replication of the "250 MW DC → 652–1000 MW batteries"
 sizing with the same LP stack
 ([protocol](experiments/PROTOCOL-gigafactory-sizing.md)): the battery band
 reappears only at a grid penalty of ~1000 €/MWh — it is the price of

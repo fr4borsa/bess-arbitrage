@@ -25,22 +25,44 @@ Gigafactories call to boost Europe's computing capacity and unlock more than
   2027, operations within 18 months of signature;
 - energy language in the release: "energy-efficient data centres". No number.
 
-**Tender documents, as read by Paweł Czyżak** (*Energy, Extended*,
-"EU's AI Factories and clean power", 05/08/2026 — the tender portal requires
-login, so this is second-hand and marked as such): the Gigafactory must be
-"supported by an environmentally sustainable infrastructure, in particular
-for energy and water supply systems"; in the **technical evaluation (40 % of
-the score) up to 10 points out of 100** go to sustainability and energy
-efficiency, "which includes using clean low carbon energy or offering load
-flexibility"; the other 60 % is financial viability and impact on Europe's AI
-growth. Hence **≈ 4 % of the total score** for clean power *or flexibility*.
-Also from the same piece: minimum size 120–150 MW, "might become up to 1 GW
-per project", "at least 100,000 GPUs" (⚠ these three numbers are not in the
-press release; treat as Czyżak's reading of the tender).
+**Tender specifications, primary source** (EUROHPC/2026/OP/0008, call ID
+EUROHPC-2026-CEI-AIGF-01, 133 pp., on the Funding & Tenders portal — read
+19/08/2026): the Gigafactory must be *"supported by an environmentally
+sustainable infrastructure, in particular for energy and water supply
+systems"*. Sustainability and energy efficiency = **10 points out of 100 in
+the technical table**; *"The Technical Evaluation criteria shall carry an
+overall weighting of 40%"*; and the final ranking is *"0.5 X1 + 0.25 X2 +
+0.25 X3"*. So sustainability is **4 % of the Part-1 score but ≈ 2 % of the
+final ranking**, and *"Grid flexibility (10%)"* inside it — *"demand
+response + time-shifting + storage (excellent)"* — is worth **≈ 0.2 % of the
+award**. Czyżak's "4 %" (05/08/2026) is the Part-1 figure. By contrast
+*"Adequacy of power infrastructure (0–8 points)"* is a separate technical
+criterion: **firm grid access is worth roughly 8× what demand flexibility is
+worth** in this tender.
 
-What this means for the thesis: the call prices flexibility at 4 % of the
-score — the **connection**, not the score, is what will decide where these
-sites can physically be built in 18 months. That is stage 1's question.
+What the tender does require on power (verbatim): *"a minimum IT load of
+120 MW for Lot 1 and 150 MW for Lot 2, fully operational within Phase 2"*
+(Phase 1 indicative 15–30 / 20–50 MW); *"85–90% of grid capacity to IT (net
+of auxiliaries)"*; *"interconnection agreements covering, within Phase 2,
+firm capacity … including POI voltage, allocated MVA, and energization
+milestones"*; system impact / feasibility studies; *"reliable backup power
+(batteries and generators) … 48–72 hours without the grid"*; and grid-aware
+operation: *"time-shifting of non-urgent training jobs, demand response
+participation, and/or on-site storage to reduce peak stress"*. Scoring guide
+for renewables: *"100% with hourly matching (excellent), ≥80% annual (good),
+50–79% (acceptable), <50% (poor)"*; PUE ≤ 1.10 excellent, > 1.25 poor.
+Processors: Lot 1 ≥ 25,000 H100-equivalent → ≥ 75,000 in Phase 2; Lot 2
+≥ 40,000 → ≥ 100,000. Purchase of compute time capped at 17 % of the CAPEX;
+"up to EUR 5 billion" total, of which up to €1 bn under the current MFF.
+(Earlier draft of this note carried "≥ 100,000 GPUs", "120–150 MW",
+"up to 1 GW" second-hand — superseded by the text above.)
+
+What this means for the thesis: the tender prices flexibility at ~0.2 % of
+the award and firm MVA at ~8× that — the **connection**, not the
+sustainability score, is what decides where these sites can physically be
+built in 18 months. That is stage 1's question, and the 48–72 h battery +
+genset the tender already forces every bidder to buy is the asset stage 1
+prices against the connection.
 
 ## 2. Czyżak's sizing, precisely
 
@@ -98,7 +120,7 @@ of *near-banning grid power*, not a property of European weather. His own
 caveat says so ("depending a lot on the grid price"); the replication puts a
 number on it: the battery moves by **3–35×** across a plausible range of
 grid penalties, the wind and solar by less than 2×. For a tender that
-weighs clean power at 4 %, the relevant question is what penalty a bidder
+weighs clean power at ~2 % of the final award, the relevant question is what penalty a bidder
 implicitly sets — and nobody has published that.
 
 Limitations declared in the protocol: one weather year; solar capacity
